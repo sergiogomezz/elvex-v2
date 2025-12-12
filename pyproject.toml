@@ -1,0 +1,35 @@
+[project]
+name = "elvex-v2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "openai",
+  "tqdm",
+  "requests",
+  "ollama",
+  "langchain",
+  "langgraph",
+  "chromadb",
+  "python-dotenv",
+  "pydantic",
+  "ipython",
+  "jupyter",
+  "ipykernel",
+  "pandas",
+  "numpy",
+  "scikit-learn",
+  "torch",
+  "transformers",
+  "tokenizers",
+  "datasets",
+  "evaluate",
+  "sentencepiece",
+  "safetensors",
+  "huggingface-hub",
+  "peft",
+  "trl",
+  "optimum",
+  "sentence-transformers"
+]
