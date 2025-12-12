@@ -5,13 +5,12 @@ requests
 ollama
 
 # Agents / frameworks
-langchain>=0.1.0
+langchain
 langgraph
 chromadb
 
 # optional
 # llama-index
-# huggingface_hub
 
 # Common dependencies
 python-dotenv
@@ -42,8 +41,7 @@ peft
 trl
 
 # Quantization / memory-efficient inference (may need CUDA/tooling)
-bitsandbytes
-xformers
+# bitsandbytes
 
 # Optimization & inference tooling
 optimum
