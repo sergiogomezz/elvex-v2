@@ -1,5 +1,5 @@
-from config.config import AGENT_DIVIDER_PROMPT
-from config.loader import load_prompt, save_output_json
+from config.settings import AGENT_DIVIDER_PROMPT
+from src.elvex.utils.loader import load_prompt, save_output_json
 
 
 class TaskDividerAgent:

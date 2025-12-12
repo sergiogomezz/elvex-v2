@@ -1,7 +1,7 @@
 import json
 
-from config.config import AGENT_ORCHESTRATOR_PROMPT
-from config.loader import load_prompt, save_output_json_orchestrator
+from config.settings import AGENT_ORCHESTRATOR_PROMPT
+from src.elvex.utils.loader import load_prompt, save_output_json_orchestrator
 
 
 class OrchestratorAgent:

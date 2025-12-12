@@ -1,7 +1,7 @@
 import json
 import os
-from config.config import AGENT_EVALUATOR_PROMPT
-from config.loader import load_prompt, save_output_json, load_root_path
+from config.settings import AGENT_EVALUATOR_PROMPT
+from src.elvex.utils.loader import load_prompt, save_output_json, load_root_path
 
 
 class TaskEvaluatorAgent:

@@ -1,6 +1,6 @@
 # This agent serves to gather the results of the different agents
-from config.config import AGENT_SUBTASK_GATHERER
-from config.loader import load_prompt, parse_json, load_root_path
+from config.settings import AGENT_SUBTASK_GATHERER
+from src.elvex.utils.loader import load_prompt, parse_json, load_root_path
 
 import os
 import json

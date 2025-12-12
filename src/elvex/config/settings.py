@@ -1,5 +1,5 @@
 import os
-from config.loader import load_root_path
+from src.elvex.utils.loader import load_root_path
 
 # General Info
 PROJECT_NAME = "TFM_Agentic_AI"

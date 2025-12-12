@@ -1,7 +1,7 @@
 import json
 import os
-from config.config import AGENT_SPECIFIER_PROMPT
-from config.loader import load_prompt, parse_json
+from config.settings import AGENT_SPECIFIER_PROMPT
+from src.elvex.utils.loader import load_prompt, parse_json
 
 class TaskSpecifierAgent:
     def __init__(self, client):
