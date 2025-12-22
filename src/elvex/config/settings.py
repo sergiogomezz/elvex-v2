@@ -2,24 +2,13 @@ import os
 from src.elvex.utils.loader import load_root_path
 
 # General Info
-PROJECT_NAME = "TFM_Agentic_AI"
+PROJECT_NAME = "elvex-v2"
 
-# Model Settings
-USE_LOCAL_MODEL = True
-
-# For ollama client
-LOCAL_MODEL_NAME = "gpt-oss:20b"
+# Model Settings (ollama, claude, openai)
+PROVIDER_USED = "openai"
+MODEL_NAME = "gpt-4o-mini"
 
 # Improvement: select a different model for each agent.
-    # Mistral 32k context but smaller model size.
-    # Ollama3 8k context but larger model size.
-
-# For OpenAI
-OPENAI_MODEL_NAME = "gpt-4o-mini"
-
-# Agents settings
-ENABLE_DYNAMIC_AGENT_GENERATOR = True
-MAX_AGENTS = 10
 
 # Paths
 ROOT_DIR = load_root_path()
