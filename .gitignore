@@ -24,7 +24,6 @@ Pipfile.lock
 # Personal configuration files
 .env
 *.env
-*.env.*
 
 # Sensitive files (such as API keys)
 keys.json
