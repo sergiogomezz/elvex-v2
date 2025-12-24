@@ -3,6 +3,8 @@ import os
 from config.settings import AGENT_SPECIFIER_PROMPT
 from src.elvex.utils.loader import load_prompt, parse_json
 
+import asyncio # make calls asynchronous
+
 class TaskSpecifierAgent:
     def __init__(self, client):
         self.client = client
