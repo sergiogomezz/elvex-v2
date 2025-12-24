@@ -3,6 +3,7 @@ import os
 from config.settings import AGENT_EVALUATOR_PROMPT
 from src.elvex.utils.loader import load_prompt, save_output_json, load_root_path
 
+# este tiene que poder volver atrás si devuelve un false y devolver contexto.
 
 class TaskEvaluatorAgent:
     def __init__(self, client):

@@ -1,5 +1,6 @@
 from src.elvex.utils.loader import save_output_json_agents
 
+
 class BaseWorkingAgent:
     def __init__(self, client, task_id, agent_id, subtask_id, agent_type, objective, prompt, context):
         self.client = client
