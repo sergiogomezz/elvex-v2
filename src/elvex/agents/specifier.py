@@ -1,9 +1,5 @@
-import json
-import os
 from config.settings import AGENT_SPECIFIER_PROMPT
 from src.elvex.utils.loader import load_prompt, parse_json
-
-import asyncio # make calls asynchronous
 
 class TaskSpecifierAgent:
     def __init__(self, client):
@@ -12,13 +8,11 @@ class TaskSpecifierAgent:
 
     def specify_task(self, user_prompt):
         messages = [
-            {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": user_prompt}
         ]
-
-        response = self.client.chat(messages)
         
-        response_parsed = parse_json(response)
+        response = self.client.chat(messages, system_prompt=self.system_prompt)
+        response_text = response.text if hasattr(response, "text") else response
+        parse_json(response_text)
 
-
-        return response
+        return response_text

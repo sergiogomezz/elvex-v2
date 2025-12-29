@@ -14,7 +14,8 @@ class TaskDividerAgent:
         ]
 
         response = self.client.chat(messages)
+        response_text = response.text if hasattr(response, "text") else response
 
-        response_parsed = save_output_json(response, "divider")
+        response_parsed = save_output_json(response_text, "divider")
 
         return response_parsed

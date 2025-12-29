@@ -17,8 +17,9 @@ class TaskEvaluatorAgent:
         ]
 
         response = self.client.chat(messages)
+        response_text = response.text if hasattr(response, "text") else response
 
-        response_parsed = save_output_json(response, "evaluator")
+        response_parsed = save_output_json(response_text, "evaluator")
 
         final_output_path = self.manage_final_tasks(response_parsed, divider_agent_result)
         

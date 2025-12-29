@@ -17,8 +17,9 @@ class SubtasksGatherer():
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": user_message}
         ]
-        final_output = self.client.chat(messages)
-        return final_output
+        response = self.client.chat(messages)
+        response_text = response.text if hasattr(response, "text") else response
+        return response_text
 
 
     def get_user_subtasks(self, task_id):

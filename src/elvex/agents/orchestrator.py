@@ -24,7 +24,8 @@ class OrchestratorAgent:
         ]
 
         response = self.client.chat(messages)
+        response_text = response.text if hasattr(response, "text") else response
 
-        orchestrator_path = save_output_json_orchestrator(response)
+        orchestrator_path = save_output_json_orchestrator(response_text)
 
         return orchestrator_path

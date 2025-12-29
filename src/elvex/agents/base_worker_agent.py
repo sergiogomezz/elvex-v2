@@ -35,8 +35,9 @@ class BaseWorkingAgent:
         max_retries = 2
         for _ in range(max_retries + 1):
             response = self.client.chat(messages)
+            response_text = response.text if hasattr(response, "text") else response
             try:
-                agents_path = save_output_json_agents(response)
+                agents_path = save_output_json_agents(response_text)
                 return agents_path
             except ValueError:
                 continue
