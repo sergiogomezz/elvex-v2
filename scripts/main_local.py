@@ -1,13 +1,43 @@
-from elvex.llms.registry import get_llm_client, LLMConfig
-# Usa el del .env:
-client = get_llm_client()
-# O fuerza uno puntual:
-# client = get_llm_client(LLMConfig(provider="ollama"))
-resp = client.chat(
-    messages=[{"role": "user", "content": "Hola"}],
-    system_prompt="Sé breve.",
-    temperature=0.2,
-    max_output_tokens=200,
-    tools=None,
-)
-print(resp.text)
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+# Ensure both "src" namespace imports and direct "elvex" imports work.
+for path in (ROOT, SRC):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
+
+from elvex.core.orchestrator import create_workflow
+from elvex.utils.utils import landing_intro
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run local agent workflow.")
+    parser.add_argument(
+        "--prompt",
+        help="User prompt to send to the task specifier.",
+    )
+    return parser
+
+
+def main() -> int:
+    landing_intro()
+
+    parser = _build_parser()
+    args = parser.parse_args()
+
+    user_prompt = args.prompt or input("What do you want to do?: ").strip()
+    if not user_prompt:
+        print("No prompt provided.")
+        return 1
+    
+    result = create_workflow(user_prompt)
+    print(result)
+
+
+if __name__ == "__main__":
+    main()

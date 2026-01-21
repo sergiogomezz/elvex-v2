@@ -20,7 +20,7 @@ class RegistrySettings(BaseSettings):
         extra = "ignore"
         populate_by_name = True
 
- 
+    
 class LLMConfig(BaseModel):
     """Optional overrides when asking the registry for a client."""
 
