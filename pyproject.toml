@@ -36,7 +36,9 @@ dependencies = [
   "peft",
   "trl",
   "optimum",
-  "sentence-transformers"
+  "sentence-transformers",
+  "pytest",
+  "langfuse"
 ]
 
 [tool.setuptools]
