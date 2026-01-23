@@ -1,7 +1,8 @@
 import json
 
 from config.settings import AGENT_ORCHESTRATOR_PROMPT
-from src.elvex.utils.loader import load_prompt, save_output_json_orchestrator
+from elvex.agents.contracts import OrchestratorPlan
+from src.elvex.utils.loader import load_prompt, save_output_json_orchestrator, parse_json
 
 
 class OrchestratorAgent:
@@ -25,7 +26,9 @@ class OrchestratorAgent:
 
         response = self.client.chat(messages)
         response_text = response.text if hasattr(response, "text") else response
+        response_parsed = parse_json(response_text)
+        OrchestratorPlan.model_validate(response_parsed)
 
-        orchestrator_path = save_output_json_orchestrator(response_text)
+        orchestrator_path = save_output_json_orchestrator(response_parsed)
 
         return orchestrator_path

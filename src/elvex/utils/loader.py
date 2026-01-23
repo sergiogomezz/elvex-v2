@@ -40,6 +40,14 @@ def parse_json(response):
         return parsed_output
     except json.JSONDecodeError as e:
         raise ValueError(f"Could not parse the response as JSON. Error: {e}")
+
+
+def coerce_json(response):
+    if isinstance(response, (dict, list)):
+        return response
+    if isinstance(response, str):
+        return parse_json(response)
+    raise TypeError(f"Unsupported JSON payload type: {type(response)}")
     
 
 def save_output_json(response, agent_type):
@@ -47,7 +55,7 @@ def save_output_json(response, agent_type):
     outputs_dir = os.path.join(root_dir, "outputs")
     os.makedirs(outputs_dir, exist_ok=True)
 
-    response_parsed = parse_json(response)
+    response_parsed = coerce_json(response)
     task_desc = response_parsed.get("task_desc", "unnamed_task")
     task_dir = os.path.join(outputs_dir, task_desc)
     os.makedirs(task_dir, exist_ok=True)
@@ -66,7 +74,7 @@ def save_output_json_orchestrator(response):
     outputs_dir = os.path.join(root_dir, "outputs")
     os.makedirs(outputs_dir, exist_ok=True)
 
-    response_parsed = parse_json(response)
+    response_parsed = coerce_json(response)
     first_item = response_parsed[0]
     task_desc = first_item.get("task_desc", "unnamed_task")
     dir_orchestrator = os.path.join(outputs_dir, task_desc, "orchestrator")
@@ -86,7 +94,7 @@ def save_output_json_agents(response):
     outputs_dir = os.path.join(root_dir, "outputs")
     os.makedirs(outputs_dir, exist_ok=True)
 
-    response_parsed = parse_json(response)
+    response_parsed = coerce_json(response)
     task_desc = response_parsed.get("task_desc", "unnamed_task")
     dir_work_agents = os.path.join(outputs_dir, task_desc, "work_agents")
     os.makedirs(dir_work_agents, exist_ok=True)

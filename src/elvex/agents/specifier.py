@@ -1,5 +1,6 @@
 from typing import Optional
 
+from elvex.agents.contracts import TaskSpecifierOutput
 from elvex.llms.types import AgentConfig
 from elvex.utils.loader import load_prompt, parse_json
 
@@ -18,7 +19,8 @@ class TaskSpecifierAgent:
 
         response = self.client.chat(messages=messages, config=self.agent_config)
         response_text = response.text if hasattr(response, "text") else response
-        parse_json(response_text)
+        response_parsed = parse_json(response_text)
+        TaskSpecifierOutput.model_validate(response_parsed)
 
         return response_text
 

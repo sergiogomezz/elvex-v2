@@ -1,4 +1,5 @@
-from src.elvex.utils.loader import save_output_json_agents
+from elvex.agents.contracts import WorkerAgentOutput
+from src.elvex.utils.loader import parse_json, save_output_json_agents
 
 
 class BaseWorkingAgent:
@@ -37,7 +38,9 @@ class BaseWorkingAgent:
             response = self.client.chat(messages)
             response_text = response.text if hasattr(response, "text") else response
             try:
-                agents_path = save_output_json_agents(response_text)
+                response_parsed = parse_json(response_text)
+                WorkerAgentOutput.model_validate(response_parsed)
+                agents_path = save_output_json_agents(response_parsed)
                 return agents_path
             except ValueError:
                 continue

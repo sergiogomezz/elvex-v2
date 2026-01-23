@@ -1,4 +1,5 @@
 from config.settings import AGENT_DIVIDER_PROMPT
+from elvex.agents.contracts import TaskDividerOutput
 from src.elvex.utils.loader import load_prompt, save_output_json
 
 
@@ -17,5 +18,6 @@ class TaskDividerAgent:
         response_text = response.text if hasattr(response, "text") else response
 
         response_parsed = save_output_json(response_text, "divider")
+        TaskDividerOutput.model_validate(response_parsed)
 
         return response_parsed
