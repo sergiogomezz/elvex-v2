@@ -64,9 +64,11 @@ class OpenAIClient:
             max_output_tokens=max_tokens,
         )
 
+        usage = getattr(resp, "usage", None)
+        usage_data = usage.model_dump() if hasattr(usage, "model_dump") else usage
         return ChatResponse(
             text=resp.output_text,
-            usage=getattr(resp, "usage", None),
+            usage=usage_data,
         )
 
 

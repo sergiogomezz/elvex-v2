@@ -1,8 +1,9 @@
 from typing import Optional
 
-from elvex.config.settings import AGENT_SPECIFIER_PROMPT
 from elvex.llms.types import AgentConfig
 from elvex.utils.loader import load_prompt, parse_json
+
+SPECIFIER_PROMPT_PATH = "task_specifier_prompt.md"
 
 
 class TaskSpecifierAgent:
@@ -22,7 +23,7 @@ class TaskSpecifierAgent:
         return response_text
 
     def _build_agent_config(self, agent_config: Optional[AgentConfig]) -> AgentConfig:
-        base_config = AgentConfig(system_prompt=load_prompt(AGENT_SPECIFIER_PROMPT))
+        base_config = AgentConfig(system_prompt=load_prompt(SPECIFIER_PROMPT_PATH))
         if agent_config is None:
             return base_config
         overrides = agent_config.model_dump(exclude_none=True)
