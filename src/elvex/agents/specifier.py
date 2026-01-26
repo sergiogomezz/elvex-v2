@@ -19,6 +19,7 @@ class TaskSpecifierAgent:
 
         response = self.client.chat(messages=messages, config=self.agent_config)
         response_text = response.text if hasattr(response, "text") else response
+        
         response_parsed = parse_json(response_text)
         TaskSpecifierOutput.model_validate(response_parsed)
 

@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 
 def load_json(path):
     with open(path, "r") as f:
@@ -50,15 +51,47 @@ def coerce_json(response):
     raise TypeError(f"Unsupported JSON payload type: {type(response)}")
     
 
-def save_output_json(response, agent_type):
+def _task_outputs_base_dir(task_desc):
     root_dir = load_root_path()
-    outputs_dir = os.path.join(root_dir, "outputs")
-    os.makedirs(outputs_dir, exist_ok=True)
+    return os.path.join(root_dir, "outputs")
 
+
+def _timestamp_dir_name():
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+
+def create_task_output_dir(task_desc):
+    base_dir = _task_outputs_base_dir(task_desc)
+    os.makedirs(base_dir, exist_ok=True)
+
+    task_dir = os.path.join(base_dir, f"{_timestamp_dir_name()}_{task_desc}")
+    os.makedirs(task_dir, exist_ok=True)
+    return task_dir
+
+
+def get_latest_task_output_dir(task_desc):
+    base_dir = _task_outputs_base_dir(task_desc)
+    if not os.path.isdir(base_dir):
+        return None
+
+    candidates = [
+        entry for entry in os.listdir(base_dir)
+        if entry.endswith(f"_{task_desc}") and os.path.isdir(os.path.join(base_dir, entry))
+    ]
+    if not candidates:
+        return None
+
+    latest = max(candidates)
+    return os.path.join(base_dir, latest)
+
+
+def save_output_json(response, agent_type, use_latest_dir: bool = False):
     response_parsed = coerce_json(response)
     task_desc = response_parsed.get("task_desc", "unnamed_task")
-    task_dir = os.path.join(outputs_dir, task_desc)
-    os.makedirs(task_dir, exist_ok=True)
+    if use_latest_dir:
+        task_dir = get_latest_task_output_dir(task_desc) or create_task_output_dir(task_desc)
+    else:
+        task_dir = create_task_output_dir(task_desc)
 
     output_path = os.path.join(task_dir, f"{agent_type}_output.json")
 
@@ -68,16 +101,12 @@ def save_output_json(response, agent_type):
     return response_parsed
 
 
-
 def save_output_json_orchestrator(response):
-    root_dir = load_root_path()
-    outputs_dir = os.path.join(root_dir, "outputs")
-    os.makedirs(outputs_dir, exist_ok=True)
-
     response_parsed = coerce_json(response)
     first_item = response_parsed[0]
     task_desc = first_item.get("task_desc", "unnamed_task")
-    dir_orchestrator = os.path.join(outputs_dir, task_desc, "orchestrator")
+    task_dir = get_latest_task_output_dir(task_desc) or create_task_output_dir(task_desc)
+    dir_orchestrator = os.path.join(task_dir, "orchestrator")
     os.makedirs(dir_orchestrator, exist_ok=True)
     
     subtask_id = first_item.get("subtask_id", "unknown_subtask")
@@ -90,13 +119,10 @@ def save_output_json_orchestrator(response):
 
 
 def save_output_json_agents(response):
-    root_dir = load_root_path()
-    outputs_dir = os.path.join(root_dir, "outputs")
-    os.makedirs(outputs_dir, exist_ok=True)
-
     response_parsed = coerce_json(response)
     task_desc = response_parsed.get("task_desc", "unnamed_task")
-    dir_work_agents = os.path.join(outputs_dir, task_desc, "work_agents")
+    task_dir = get_latest_task_output_dir(task_desc) or create_task_output_dir(task_desc)
+    dir_work_agents = os.path.join(task_dir, "work_agents")
     os.makedirs(dir_work_agents, exist_ok=True)
     
     subtask_id = response_parsed.get("subtask_id", "unknown_subtask")

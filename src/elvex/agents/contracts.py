@@ -8,7 +8,6 @@ from pydantic import BaseModel, RootModel
 class TaskSpecifierOutput(BaseModel):
     task_type: str
     details: str
-    parameters: Dict[str, Any]
 
 
 class Subtask(BaseModel):
@@ -26,9 +25,7 @@ class TaskDividerOutput(BaseModel):
 class TaskEvaluatorOutput(BaseModel):
     task_desc: str
     is_valid: bool
-    overall_comment: str
     correction_explanation: str
-    corrected_subtasks: Optional[List[Subtask]] = None
 
 
 class OrchestratorAgentSpec(BaseModel):
