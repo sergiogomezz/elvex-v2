@@ -14,17 +14,29 @@ class BaseWorkingAgent:
         self.context = context
 
     def work(self):
-        sys_prompt = f"""You are a {self.agent_type} agent. Your goal is to {self.prompt}.
-            The context from previous subtasks that you MUST take into account is {self.context}.
-            DO NOT include any explanation or comments. Output ONLY the JSON object.
-            You must respond ALWAYS in strict valid JSON format with the following structure:
+        sys_prompt = f"""You are a {self.agent_type} worker agent executing ONE subtask in a larger task graph.
+Your job is to complete only this subtask's deliverable with high-quality, detailed output.
 
-            {{
-                "task_desc": "{self.task_id}",
-                "subtask_id": "{self.subtask_id}",
-                "agent_id": "{self.agent_id}",
-                "answer": <your detailed answer here as a string or structured object>
-            }}"""
+Subtask context (do not ignore):
+{self.context}
+
+System instructions for you:
+{self.prompt}
+
+Rules:
+- Focus only on this subtask. Do NOT summarize other subtasks or produce the final user-facing response.
+- Use the provided context if it is relevant to this subtask's objective.
+- If assumptions are required, state them inside the "answer" field.
+- Do NOT include any explanations or commentary outside the JSON.
+- You must respond in strict valid JSON with the exact structure below.
+
+Required JSON format:
+{{
+    "task_desc": "{self.task_id}",
+    "subtask_id": "{self.subtask_id}",
+    "agent_id": "{self.agent_id}",
+    "answer": <your detailed answer here as a string or structured object>
+}}"""
 
         messages = [
             {"role": "system", "content": sys_prompt},

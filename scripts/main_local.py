@@ -11,7 +11,7 @@ for path in (ROOT, SRC):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from elvex.core.orchestrator import create_workflow
+from elvex.core.workflow import create_workflow
 from elvex.utils.utils import landing_intro
    
 

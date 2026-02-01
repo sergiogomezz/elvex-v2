@@ -6,8 +6,10 @@ You will receive:
 - The original user task, including its type, description, and parameters.
 - A list of subtasks generated to solve it. Each subtask contains an ID, title, description, and optional dependency list.
 
-If the subtasks are overly split into parts of an explanation meant only for user understanding (not execution), 
-suggest grouping them into a single explanatory subtask aimed at producing a user-facing answer.
+If the subtasks are overly split into parts of an explanation meant only for user understanding (not execution),
+suggest grouping them into a single explanatory subtask aimed at producing the intermediate deliverable (not the final user-facing response).
+
+Subtasks must be true work units only. Reject any subtask that is a summary, synthesis, or final response, since a separate gatherer agent will combine subtask outputs into the final response.
 
 Be constructive, objective, and focused on task feasibility and agent orchestration.
 

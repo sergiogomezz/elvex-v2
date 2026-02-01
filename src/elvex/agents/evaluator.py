@@ -36,9 +36,10 @@ class TaskEvaluatorAgent:
         TaskEvaluatorOutput.model_validate(minimal_response)
         save_output_json(minimal_response, "evaluator", use_latest_dir=True)
 
-        final_output_path = self.manage_final_tasks(response_parsed, divider_agent_result)
+        final_output_path = self.manage_final_tasks(minimal_response, divider_agent_result)
         
         return response_parsed, final_output_path
+
 
     def _build_agent_config(self, agent_config: Optional[AgentConfig]) -> AgentConfig:
         base_config = AgentConfig(system_prompt=load_prompt(EVALUATOR_PROMPT_PATH))
@@ -48,7 +49,7 @@ class TaskEvaluatorAgent:
         return base_config.model_copy(update=overrides)
 
 
-    def manage_final_tasks(self, response_parsed, divider_agent_result):
+    def manage_final_tasks(self, minimal_response, divider_agent_result):
         is_valid = minimal_response.get("is_valid", False)
         if not is_valid:
             return None

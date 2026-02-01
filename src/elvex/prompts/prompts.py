@@ -1,0 +1,1 @@
+# poner las rutas a todo e importar esto desde los agentes. Para versionado es mejor
