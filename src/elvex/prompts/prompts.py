@@ -1,1 +1,1 @@
-# poner las rutas a todo e importar esto desde los agentes. Para versionado es mejor
+# Set paths to prompt to allow prompt versioning

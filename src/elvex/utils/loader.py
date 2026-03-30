@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime
 
 def load_json(path):
@@ -36,11 +37,42 @@ def load_prompt(prompt_name):
     
 
 def parse_json(response):
+    if not isinstance(response, str):
+        raise TypeError(f"Expected string response, got: {type(response)}")
+
+    text = response.strip()
+    if not text:
+        raise ValueError("Could not parse the response as JSON. Error: empty response from model.")
+
     try:
-        parsed_output = json.loads(response.strip())
+        parsed_output = json.loads(text)
         return parsed_output
     except json.JSONDecodeError as e:
-        raise ValueError(f"Could not parse the response as JSON. Error: {e}")
+        # Common case: the model wraps JSON in markdown fences.
+        fenced_match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, flags=re.DOTALL | re.IGNORECASE)
+        if fenced_match:
+            fenced_text = fenced_match.group(1).strip()
+            if fenced_text:
+                try:
+                    return json.loads(fenced_text)
+                except json.JSONDecodeError:
+                    pass
+
+        # Fallback: extract first object/array from surrounding text.
+        first_obj = text.find("{")
+        first_arr = text.find("[")
+        starts = [idx for idx in (first_obj, first_arr) if idx != -1]
+        if starts:
+            start = min(starts)
+            candidate = text[start:]
+            try:
+                parsed_output, _ = json.JSONDecoder().raw_decode(candidate)
+                return parsed_output
+            except json.JSONDecodeError:
+                pass
+
+        preview = text[:200].replace("\n", "\\n")
+        raise ValueError(f"Could not parse the response as JSON. Error: {e}. Response preview: {preview}")
 
 
 def coerce_json(response):

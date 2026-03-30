@@ -31,7 +31,7 @@ Rules:
    - description: specific and outcome-oriented
    - depends_on: list of prerequisite subtask ids, or an empty list
 
-4b. Subtasks must be true work units, not a summary or final response. Do NOT include a subtask that synthesizes or summarizes all results. A separate gatherer agent will combine subtask outputs into the final response.
+4b. You are dividing the task into executable work units only. Do NOT include any summary, synthesis, wrap-up, or final-response subtask. The gatherer agent is fully responsible for combining subtask outputs and producing the final response.
 
 5. Dependencies must represent real prerequisites only.
 
