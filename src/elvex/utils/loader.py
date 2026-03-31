@@ -3,6 +3,27 @@ import os
 import re
 from datetime import datetime
 
+SAFE_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+
+
+def _validate_identifier(value: str, field_name: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{field_name} must be a string, got: {type(value)}")
+    if not SAFE_IDENTIFIER_PATTERN.fullmatch(value):
+        raise ValueError(
+            f"Invalid {field_name}: '{value}'. Allowed pattern: {SAFE_IDENTIFIER_PATTERN.pattern}"
+        )
+    return value
+
+
+def _safe_join(base_dir: str, *parts: str) -> str:
+    base_real = os.path.realpath(base_dir)
+    candidate = os.path.realpath(os.path.join(base_dir, *parts))
+    if not (candidate == base_real or candidate.startswith(base_real + os.sep)):
+        raise ValueError(f"Unsafe path resolution detected: {candidate}")
+    return candidate
+
+
 def load_json(path):
     with open(path, "r") as f:
         result = json.load(f)
@@ -93,15 +114,17 @@ def _timestamp_dir_name():
 
 
 def create_task_output_dir(task_desc):
+    task_desc = _validate_identifier(task_desc, "task_desc")
     base_dir = _task_outputs_base_dir(task_desc)
     os.makedirs(base_dir, exist_ok=True)
 
-    task_dir = os.path.join(base_dir, f"{_timestamp_dir_name()}_{task_desc}")
+    task_dir = _safe_join(base_dir, f"{_timestamp_dir_name()}_{task_desc}")
     os.makedirs(task_dir, exist_ok=True)
     return task_dir
 
 
 def get_latest_task_output_dir(task_desc):
+    task_desc = _validate_identifier(task_desc, "task_desc")
     base_dir = _task_outputs_base_dir(task_desc)
     if not os.path.isdir(base_dir):
         return None
@@ -119,13 +142,14 @@ def get_latest_task_output_dir(task_desc):
 
 def save_output_json(response, agent_type, use_latest_dir: bool = False):
     response_parsed = coerce_json(response)
-    task_desc = response_parsed.get("task_desc", "unnamed_task")
+    task_desc = _validate_identifier(response_parsed.get("task_desc", "unnamed_task"), "task_desc")
+    agent_type = _validate_identifier(agent_type, "agent_type")
     if use_latest_dir:
         task_dir = get_latest_task_output_dir(task_desc) or create_task_output_dir(task_desc)
     else:
         task_dir = create_task_output_dir(task_desc)
 
-    output_path = os.path.join(task_dir, f"{agent_type}_output.json")
+    output_path = _safe_join(task_dir, f"{agent_type}_output.json")
 
     with open(output_path, "w") as f:
         json.dump(response_parsed, f, indent=2)
@@ -136,13 +160,13 @@ def save_output_json(response, agent_type, use_latest_dir: bool = False):
 def save_output_json_orchestrator(response):
     response_parsed = coerce_json(response)
     first_item = response_parsed[0]
-    task_desc = first_item.get("task_desc", "unnamed_task")
+    task_desc = _validate_identifier(first_item.get("task_desc", "unnamed_task"), "task_desc")
     task_dir = get_latest_task_output_dir(task_desc) or create_task_output_dir(task_desc)
-    dir_orchestrator = os.path.join(task_dir, "orchestrator")
+    dir_orchestrator = _safe_join(task_dir, "orchestrator")
     os.makedirs(dir_orchestrator, exist_ok=True)
     
-    subtask_id = first_item.get("subtask_id", "unknown_subtask")
-    output_path = os.path.join(dir_orchestrator, f"{subtask_id}_output.json")
+    subtask_id = _validate_identifier(first_item.get("subtask_id", "unknown_subtask"), "subtask_id")
+    output_path = _safe_join(dir_orchestrator, f"{subtask_id}_output.json")
 
     with open(output_path, "w") as f:
         json.dump(response_parsed, f, indent=2)
@@ -152,17 +176,17 @@ def save_output_json_orchestrator(response):
 
 def save_output_json_agents(response):
     response_parsed = coerce_json(response)
-    task_desc = response_parsed.get("task_desc", "unnamed_task")
+    task_desc = _validate_identifier(response_parsed.get("task_desc", "unnamed_task"), "task_desc")
     task_dir = get_latest_task_output_dir(task_desc) or create_task_output_dir(task_desc)
-    dir_work_agents = os.path.join(task_dir, "work_agents")
+    dir_work_agents = _safe_join(task_dir, "work_agents")
     os.makedirs(dir_work_agents, exist_ok=True)
     
-    subtask_id = response_parsed.get("subtask_id", "unknown_subtask")
-    subtask_path = os.path.join(dir_work_agents, subtask_id)
+    subtask_id = _validate_identifier(response_parsed.get("subtask_id", "unknown_subtask"), "subtask_id")
+    subtask_path = _safe_join(dir_work_agents, subtask_id)
     os.makedirs(subtask_path, exist_ok=True)
 
-    agent_id = response_parsed.get("agent_id", "unknown_agent")
-    output_path = os.path.join(subtask_path, f"{agent_id}_output.json")
+    agent_id = _validate_identifier(response_parsed.get("agent_id", "unknown_agent"), "agent_id")
+    output_path = _safe_join(subtask_path, f"{agent_id}_output.json")
 
     with open(output_path, "w") as f:
         json.dump(response_parsed, f, indent=2)

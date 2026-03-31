@@ -24,6 +24,8 @@ mcp = FastMCP("elvex-mcp-server")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("elvex-mcp-logger")
+MAX_CALC_EXPRESSION_LEN = 200
+CALC_ALLOWED_CHARS = re.compile(r"^[0-9A-Za-z_+\-*/().,\s]*$")
 
 # -----------------------------
 # 1. Calculator tool
@@ -49,6 +51,17 @@ async def calculate(expression: str) -> str:
     Evaluates scientific mathematical expressions safely.
     """
     logger.info(f"Tool Accessed: 'calculate' with expression: {expression}")
+
+    expression = expression.strip()
+    if not expression:
+        return "Error: Empty expression."
+    if len(expression) > MAX_CALC_EXPRESSION_LEN:
+        return f"Error: Expression too long (max {MAX_CALC_EXPRESSION_LEN} chars)."
+    if not CALC_ALLOWED_CHARS.fullmatch(expression):
+        return "Error: Expression contains unsupported characters."
+    # Guard against expensive exponentiation patterns.
+    if expression.count("**") > 2 or re.search(r"\*\*\s*\d{4,}", expression):
+        return "Error: Exponentiation pattern too complex."
     
     try:
         result = s_eval.eval(expression)
