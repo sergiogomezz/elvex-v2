@@ -12,7 +12,7 @@ for path in (ROOT, SRC):
         sys.path.insert(0, str(path))
 
 from elvex.core.workflow import create_workflow
-from elvex.utils.utils import landing_intro
+from elvex.utils.utils import landing_intro, loading_animation
    
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -35,7 +35,13 @@ def main() -> int:
         print("No prompt provided.")
         return 1
     
-    result = create_workflow(user_prompt)
+    stop_loading = loading_animation()
+    try:
+        result = create_workflow(user_prompt)
+    finally:
+        stop_loading()
+        print()
+
     print(result)
 
 

@@ -1,5 +1,5 @@
 from elvex.agents.contracts import WorkerAgentOutput
-from src.elvex.utils.loader import parse_json, save_output_json_agents
+from elvex.utils.loader import parse_json, save_output_json_agents
 
 
 class BaseWorkingAgent:
@@ -43,7 +43,6 @@ Required JSON format:
             {"role": "user", "content": self.objective}
         ]
 
-        # Gestiona la persistencia. Si falla el formato de salida, reejecuta el agente.
 
         max_retries = 2
         for _ in range(max_retries + 1):

@@ -1,1 +1,1 @@
-# Set paths to prompt to allow prompt versioning
+# Allow prompt versioning by using yaml files and a loader for that
