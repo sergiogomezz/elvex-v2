@@ -1,4 +1,5 @@
 from elvex.agents.contracts import WorkerAgentOutput
+from elvex.tools.local_tools import OPENAI_LOCAL_TOOLS, execute_local_tool
 from elvex.utils.loader import parse_json, save_output_json_agents
 
 
@@ -46,7 +47,11 @@ Required JSON format:
 
         max_retries = 2
         for _ in range(max_retries + 1):
-            response = self.client.chat(messages)
+            response = self.client.chat(
+                messages,
+                tools=OPENAI_LOCAL_TOOLS,
+                tool_executor=execute_local_tool,
+            )
             response_text = response.text if hasattr(response, "text") else response
             try:
                 response_parsed = parse_json(response_text)
