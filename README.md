@@ -5,6 +5,17 @@ Elvex v2 is a multi-agent orchestration pipeline that turns a user prompt into a
 
 The execution model uses a double-funnel architecture: worker outputs are first consolidated per subtask (`gatherer_subagents`), then those subtask-level outputs are combined into a final user-facing response (`gatherer_subtasks`). This keeps decomposition and execution granular while preserving a coherent final output.
 
+![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)
+![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white)
+![Pydantic](https://img.shields.io/badge/Pydantic-E92063?style=for-the-badge&logo=pydantic&logoColor=white)
+
+## Design Highlights
+- **Model-agnostic**: provider registry supports OpenAI, Anthropic, and Ollama via a unified interface
+- **Topological task ordering**: subtask dependencies resolved with Kahn's algorithm
+- **Typed contracts**: all agent I/O validated with Pydantic models
+- **Self-correcting pipeline**: evaluator feedback loop forces the divider to revise invalid decompositions
+
 ```mermaid
 flowchart TD
     A[User Prompt] --> B[TaskSpecifierAgent]
