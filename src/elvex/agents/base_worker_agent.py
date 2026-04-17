@@ -1,10 +1,21 @@
 from elvex.agents.contracts import WorkerAgentOutput
-from elvex.tools.local_tools import OPENAI_LOCAL_TOOLS, execute_local_tool
+from elvex.tools.local_tools import get_agent_tool_definitions, get_agent_tool_executor
 from elvex.utils.loader import parse_json, save_output_json_agents
 
 
 class BaseWorkingAgent:
-    def __init__(self, client, task_id, agent_id, subtask_id, agent_type, objective, prompt, context):
+    def __init__(
+        self,
+        client,
+        task_id,
+        agent_id,
+        subtask_id,
+        agent_type,
+        objective,
+        prompt,
+        context,
+        allowed_tools=None,
+    ):
         self.client = client
         self.task_id = task_id
         self.subtask_id = subtask_id
@@ -13,6 +24,7 @@ class BaseWorkingAgent:
         self.objective = objective
         self.prompt = prompt
         self.context = context
+        self.allowed_tools = allowed_tools
 
     def work(self):
         sys_prompt = f"""You are a {self.agent_type} worker agent executing ONE subtask in a larger task graph.
@@ -45,12 +57,23 @@ Required JSON format:
         ]
 
 
+        tool_definitions = get_agent_tool_definitions(
+            agent_type=self.agent_type,
+            agent_id=self.agent_id,
+            explicit_allowlist=self.allowed_tools,
+        )
+        tool_executor = get_agent_tool_executor(
+            agent_type=self.agent_type,
+            agent_id=self.agent_id,
+            explicit_allowlist=self.allowed_tools,
+        )
+
         max_retries = 2
         for _ in range(max_retries + 1):
             response = self.client.chat(
                 messages,
-                tools=OPENAI_LOCAL_TOOLS,
-                tool_executor=execute_local_tool,
+                tools=tool_definitions or None,
+                tool_executor=tool_executor,
             )
             response_text = response.text if hasattr(response, "text") else response
             try:

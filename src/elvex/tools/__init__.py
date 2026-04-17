@@ -1,1 +1,1 @@
-"""Tool definitions and local tool executors for agent tool-calling."""
+"""Tooling package for worker-agent local tool calling."""
