@@ -16,7 +16,7 @@ class GathererSubtasks:
         self.client = client
         self.system_prompt = load_prompt(SUBTASKS_GATHERER_PROMPT_PATH)
 
-    def gather_subtasks(self, task_desc: str) -> str:
+    def gather_subtasks(self, task_desc: str, lf_parent=None) -> str:
         task_dir = get_latest_task_output_dir(task_desc)
         if not task_dir:
             raise ValueError(f"No output directory found for task '{task_desc}'.")
@@ -39,7 +39,12 @@ class GathererSubtasks:
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": json.dumps(gathered_payloads, indent=2)},
         ]
-        response = self.client.chat(messages=messages)
+        response = self.client.chat(
+            messages=messages,
+            lf_parent=lf_parent,
+            observation_name="GathererSubtasks.chat",
+            observation_metadata={"agent": "GathererSubtasks"},
+        )
         response_text = response.text if hasattr(response, "text") else response
 
         final_output_path = os.path.join(task_dir, "final_answer.txt")

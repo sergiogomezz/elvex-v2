@@ -13,7 +13,7 @@ class OrchestratorAgent:
         self.client = client
         self.agent_config = self._build_agent_config(agent_config)
 
-    def design_agents(self, task_desc: str, subtask: dict):
+    def design_agents(self, task_desc: str, subtask: dict, lf_parent=None):
         prompt = json.dumps(
             {
                 "task_desc": task_desc,
@@ -28,7 +28,16 @@ class OrchestratorAgent:
             {"role": "user", "content": prompt},
         ]
 
-        response = self.client.chat(messages=messages, config=self.agent_config)
+        response = self.client.chat(
+            messages=messages,
+            config=self.agent_config,
+            lf_parent=lf_parent,
+            observation_name="OrchestratorAgent.chat",
+            observation_metadata={
+                "agent": "OrchestratorAgent",
+                "subtask_id": subtask["id"],
+            },
+        )
         response_text = response.text if hasattr(response, "text") else response
         response_parsed = parse_json(response_text)
         OrchestratorPlan.model_validate(response_parsed)

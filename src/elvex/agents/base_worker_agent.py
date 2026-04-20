@@ -26,7 +26,7 @@ class BaseWorkingAgent:
         self.context = context
         self.allowed_tools = allowed_tools
 
-    def work(self):
+    def work(self, lf_parent=None):
         sys_prompt = f"""You are a {self.agent_type} worker agent executing ONE subtask in a larger task graph.
 Your job is to complete only this subtask's deliverable with high-quality, detailed output.
 
@@ -74,6 +74,14 @@ Required JSON format:
                 messages,
                 tools=tool_definitions or None,
                 tool_executor=tool_executor,
+                lf_parent=lf_parent,
+                observation_name="BaseWorkingAgent.chat",
+                observation_metadata={
+                    "agent": "BaseWorkingAgent",
+                    "agent_id": self.agent_id,
+                    "agent_type": self.agent_type,
+                    "subtask_id": self.subtask_id,
+                },
             )
             response_text = response.text if hasattr(response, "text") else response
             try:

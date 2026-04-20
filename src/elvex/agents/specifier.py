@@ -12,12 +12,18 @@ class TaskSpecifierAgent:
         self.client = client
         self.agent_config = self._build_agent_config(agent_config)
 
-    def specify_task(self, user_prompt: str) -> str:
+    def specify_task(self, user_prompt: str, lf_parent=None) -> str:
         messages = [
             {"role": "user", "content": user_prompt}
         ]
 
-        response = self.client.chat(messages=messages, config=self.agent_config)
+        response = self.client.chat(
+            messages=messages,
+            config=self.agent_config,
+            lf_parent=lf_parent,
+            observation_name="TaskSpecifierAgent.chat",
+            observation_metadata={"agent": "TaskSpecifierAgent"},
+        )
         response_text = response.text if hasattr(response, "text") else response
         
         response_parsed = parse_json(response_text)

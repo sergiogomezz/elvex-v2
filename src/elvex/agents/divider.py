@@ -13,7 +13,7 @@ class TaskDividerAgent:
         self.client = client
         self.agent_config = self._build_agent_config(agent_config)
 
-    def divide_tasks(self, specifier_agent_result, evaluator_feedback: Optional[Union[str, dict]] = None):
+    def divide_tasks(self, specifier_agent_result, evaluator_feedback: Optional[Union[str, dict]] = None, lf_parent=None):
         messages = [
             {"role": "user", "content": specifier_agent_result}
         ]
@@ -26,7 +26,16 @@ class TaskDividerAgent:
             )
             messages.append({"role": "user", "content": f"Evaluator feedback:\n{feedback_text}"})
     
-        response = self.client.chat(messages=messages, config=self.agent_config)
+        response = self.client.chat(
+            messages=messages,
+            config=self.agent_config,
+            lf_parent=lf_parent,
+            observation_name="TaskDividerAgent.chat",
+            observation_metadata={
+                "agent": "TaskDividerAgent",
+                "has_evaluator_feedback": bool(evaluator_feedback),
+            },
+        )
         response_text = response.text if hasattr(response, "text") else response
 
         response_parsed = save_output_json(response_text, "divider")

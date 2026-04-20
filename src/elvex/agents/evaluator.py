@@ -19,12 +19,18 @@ class TaskEvaluatorAgent:
         self.client = client
         self.agent_config = self._build_agent_config(agent_config)
 
-    def evaluate_tasks(self, divider_agent_result):
+    def evaluate_tasks(self, divider_agent_result, lf_parent=None):
         messages = [
             {"role": "user", "content": json.dumps(divider_agent_result, indent=2)}
         ]
 
-        response = self.client.chat(messages=messages, config=self.agent_config)
+        response = self.client.chat(
+            messages=messages,
+            config=self.agent_config,
+            lf_parent=lf_parent,
+            observation_name="TaskEvaluatorAgent.chat",
+            observation_metadata={"agent": "TaskEvaluatorAgent"},
+        )
         response_text = response.text if hasattr(response, "text") else response
 
         response_parsed = coerce_json(response_text)

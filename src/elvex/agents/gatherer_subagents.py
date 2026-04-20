@@ -16,7 +16,7 @@ class GathererSubagents:
         self.client = client
         self.system_prompt = load_prompt(SUBAGENTS_GATHERER_PROMPT_PATH)
 
-    def gather_subtask(self, task_desc: str, subtask_id: str) -> str:
+    def gather_subtask(self, task_desc: str, subtask_id: str, lf_parent=None) -> str:
         task_dir = get_latest_task_output_dir(task_desc)
         if not task_dir:
             raise ValueError(f"No output directory found for task '{task_desc}'.")
@@ -49,7 +49,15 @@ class GathererSubagents:
             {"role": "user", "content": user_message},
         ]
 
-        response = self.client.chat(messages=messages)
+        response = self.client.chat(
+            messages=messages,
+            lf_parent=lf_parent,
+            observation_name="GathererSubagents.chat",
+            observation_metadata={
+                "agent": "GathererSubagents",
+                "subtask_id": subtask_id,
+            },
+        )
         response_text = response.text if hasattr(response, "text") else response
         response_parsed = parse_json(response_text)
 

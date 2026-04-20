@@ -50,6 +50,11 @@ Required keys:
 - `OPENAI_API_KEY` (if using OpenAI)
 - `OPENAI_MODEL` (for OpenAI runs)
 
+Optional observability keys (Langfuse):
+- `LANGFUSE_PUBLIC_KEY`
+- `LANGFUSE_SECRET_KEY`
+- `LANGFUSE_BASE_URL` (defaults to `https://cloud.langfuse.com`)
+
 4. Run the local workflow:
 ```bash
 python scripts/main_local.py
@@ -58,3 +63,11 @@ or
 ```bash
 python scripts/main_local.py --prompt "Plan a 7-day trip to Malaysia"
 ```
+
+## Langfuse Tracing
+When `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are configured, the workflow sends traces to Langfuse with:
+- root trace for the full workflow
+- stage spans (specifier/divider/evaluator/orchestrator/workers/gatherers)
+- generation events for each LLM call (input, output, latency, errors)
+- tool spans for worker tool calls
+- usage/token metadata when the provider returns it
