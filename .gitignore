@@ -12,6 +12,7 @@ build/
 # uv (virtual environment if used locally)
 .venv/
 .uv/
+.venv
 
 # Generated dependencies (uv can create lock files)
 uv.lock

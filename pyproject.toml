@@ -38,7 +38,8 @@ dependencies = [
   "optimum",
   "sentence-transformers",
   "pytest",
-  "langfuse"
+  "langfuse",
+  "simpleeval>=1.0.7",
 ]
 
 [tool.setuptools]
