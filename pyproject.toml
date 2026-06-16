@@ -40,6 +40,7 @@ dependencies = [
   "pytest",
   "langfuse",
   "simpleeval>=1.0.7",
+  "pydantic-settings>=2.14.1",
 ]
 
 [tool.setuptools]
