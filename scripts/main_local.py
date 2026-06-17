@@ -24,7 +24,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> int:
+def main() -> str:
     landing_intro()
 
     parser = _build_parser()
