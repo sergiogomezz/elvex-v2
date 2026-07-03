@@ -13,7 +13,7 @@ for path in (ROOT, SRC):
 
 from elvex.core.workflow import create_workflow
 from elvex.utils.utils import landing_intro, loading_animation
-   
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run local agent workflow.")
@@ -24,7 +24,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> str:
+def main() -> int:
     landing_intro()
 
     parser = _build_parser()
@@ -33,7 +33,7 @@ def main() -> str:
     user_prompt = args.prompt or input("What do you want to do?: ").strip()
     if not user_prompt:
         print("No prompt provided.")
-        return 1
+        return 0
     
     stop_loading = loading_animation()
     try:
@@ -43,6 +43,7 @@ def main() -> str:
         print()
 
     print(result)
+    return 1
 
 
 if __name__ == "__main__":
