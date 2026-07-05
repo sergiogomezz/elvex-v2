@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Literal, Optional, Protocol
 
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from elvex.llms.types import AgentConfig, ChatResponse, Message
 
@@ -13,12 +13,9 @@ Provider = Literal["openai", "ollama", "claude"]
 class RegistrySettings(BaseSettings):
     """Defaults for the registry (read from .env)."""
 
-    provider_used: Provider = Field(default="openai", alias="PROVIDER_USED")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
-        populate_by_name = True
+    provider_used: Provider = Field(default="openai", alias="PROVIDER_USED")
 
     
 class LLMConfig(BaseModel):

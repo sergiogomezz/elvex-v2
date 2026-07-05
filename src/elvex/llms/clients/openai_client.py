@@ -6,21 +6,17 @@ from typing import Any, Callable, Dict, List, Optional
 
 from openai import OpenAI
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from elvex.llms.types import AgentConfig, ChatResponse, Message
 from elvex.observability import get_observer
 
 
 class OpenAISettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
     api_key: str = Field(alias="OPENAI_API_KEY")
     model: Optional[str] = Field(default="gpt-4o-mini", alias="OPENAI_MODEL")
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
-        populate_by_name = True
 
 
 class OpenAIClient:

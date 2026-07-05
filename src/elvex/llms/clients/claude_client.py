@@ -5,20 +5,17 @@ from typing import Any, Dict, List, Optional
 
 from anthropic import Anthropic
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from elvex.llms.types import AgentConfig, ChatResponse, Message
 from elvex.observability import get_observer
 
 
 class ClaudeSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+
     api_key: str = Field(alias="ANTHROPIC_API_KEY")
     model: str = Field(default="claude-3-haiku-20240307", alias="CLAUDE_MODEL")
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
-        populate_by_name = True
 
 
 class ClaudeClient:

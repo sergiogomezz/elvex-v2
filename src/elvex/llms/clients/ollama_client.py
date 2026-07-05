@@ -6,18 +6,15 @@ from typing import Any, Dict, List, Optional
 import shutil
 from ollama import chat
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from elvex.llms.types import AgentConfig, ChatResponse, Message
 from elvex.observability import get_observer
 
 class OllamaSettings(BaseSettings):
-    model: str = Field(default="llama3", alias="OLLAMA_MODEL")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
-        populate_by_name = True
+    model: str = Field(default="llama3", alias="OLLAMA_MODEL")
 
 
 class OllamaClient:
