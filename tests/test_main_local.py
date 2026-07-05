@@ -2,6 +2,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
+from elvex.core.errors import WorkflowReliabilityError
 from elvex.llms.errors import LLMQuotaError
 
 
@@ -30,3 +31,21 @@ def test_main_local_prints_friendly_provider_error(monkeypatch, capsys):
 
     assert exit_code == 1
     assert "Error: Insufficient quota on OpenAI API." in capsys.readouterr().out
+
+
+def test_main_local_prints_friendly_workflow_error(monkeypatch, capsys):
+    main_local = _load_main_local_module()
+
+    monkeypatch.setattr(sys, "argv", ["main_local.py", "--prompt", "demo"])
+    monkeypatch.setattr(main_local, "landing_intro", lambda: None)
+    monkeypatch.setattr(main_local, "loading_animation", lambda: lambda: None)
+    monkeypatch.setattr(
+        main_local,
+        "create_workflow",
+        lambda prompt: (_ for _ in ()).throw(WorkflowReliabilityError("Worker failed cleanly.")),
+    )
+
+    exit_code = main_local.main()
+
+    assert exit_code == 1
+    assert "Error: Worker failed cleanly." in capsys.readouterr().out

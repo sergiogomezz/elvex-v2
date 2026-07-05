@@ -43,6 +43,7 @@ dependencies = [
   "pydantic-settings>=2.14.1",
   "fastmcp>=3.4.2",
   "uvicorn>=0.38.0",
+  "fastapi>=0.139.0",
 ]
 
 [tool.setuptools]

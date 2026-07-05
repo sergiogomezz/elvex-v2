@@ -1,4 +1,8 @@
+from pydantic import ValidationError
+
 from elvex.agents.contracts import WorkerAgentOutput
+from elvex.agents.retry import DEFAULT_JSON_MAX_RETRIES, JSON_REPAIR_MESSAGE
+from elvex.core.errors import MalformedAgentResponseError
 from elvex.tools.local_tools import get_agent_tool_definitions, get_agent_tool_executor
 from elvex.utils.loader import parse_json, save_output_json_agents
 
@@ -68,10 +72,18 @@ Required JSON format:
             explicit_allowlist=self.allowed_tools,
         )
 
-        max_retries = 2
-        for _ in range(max_retries + 1):
+        max_retries = DEFAULT_JSON_MAX_RETRIES
+        last_error: Exception | None = None
+        for retry_number in range(max_retries + 1):
+            attempt_messages = messages
+            if retry_number > 0:
+                attempt_messages = [
+                    *messages,
+                    {"role": "user", "content": JSON_REPAIR_MESSAGE},
+                ]
+
             response = self.client.chat(
-                messages,
+                attempt_messages,
                 tools=tool_definitions or None,
                 tool_executor=tool_executor,
                 lf_parent=lf_parent,
@@ -83,6 +95,10 @@ Required JSON format:
                     "agent_id": self.agent_id,
                     "agent_type": self.agent_type,
                     "subtask_id": self.subtask_id,
+                    "retry_number": retry_number,
+                    "max_retries": max_retries,
+                    "is_retry": retry_number > 0,
+                    "retry_reason": str(last_error) if last_error else None,
                 },
             )
             response_text = response.text if hasattr(response, "text") else response
@@ -91,6 +107,10 @@ Required JSON format:
                 WorkerAgentOutput.model_validate(response_parsed)
                 agents_path = save_output_json_agents(response_parsed)
                 return agents_path
-            except ValueError:
+            except (ValueError, TypeError, ValidationError) as exc:
+                last_error = exc
                 continue
-        return None
+        raise MalformedAgentResponseError(
+            f"Worker '{self.agent_id}' for subtask '{self.subtask_id}' returned malformed JSON "
+            f"after {max_retries + 1} attempts. Last error: {last_error}"
+        )

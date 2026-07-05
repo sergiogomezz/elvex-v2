@@ -12,6 +12,7 @@ for path in (ROOT, SRC):
         sys.path.insert(0, str(path))
 
 from elvex.core.workflow import create_workflow
+from elvex.core.errors import WorkflowReliabilityError
 from elvex.llms.errors import LLMProviderError
 from elvex.utils.utils import landing_intro, loading_animation
 
@@ -41,7 +42,7 @@ def main() -> int:
     result = None
     try:
         result = create_workflow(user_prompt)
-    except LLMProviderError as exc:
+    except (LLMProviderError, WorkflowReliabilityError) as exc:
         error = exc
     finally:
         stop_loading()

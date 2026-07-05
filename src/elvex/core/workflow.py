@@ -4,6 +4,11 @@ import os
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from elvex.core.errors import (
+    MalformedAgentResponseError,
+    OrchestratorOutputError,
+    WorkerExecutionError,
+)
 from elvex.llms.types import AgentConfig
 from elvex.agents.base_worker_agent import BaseWorkingAgent
 from elvex.agents.gatherer_subagents import GathererSubagents
@@ -17,6 +22,14 @@ from elvex.observability import get_observer
 from elvex.core.task_graph import build_task_graph, get_ready_subtasks, subtasks_from_divider_output
 
 WORKFLOW_VERSION = "v1"
+REQUIRED_WORKER_SPEC_KEYS = {
+    "task_desc",
+    "subtask_id",
+    "agent_id",
+    "agent_type",
+    "objective",
+    "prompt",
+}
 
 
 class WorkflowObservabilitySettings(BaseSettings):
@@ -59,6 +72,40 @@ def _build_dependency_context(dependency_output_paths: list[str]) -> str:
             context_chunks.append(f.read())
 
     return "\n\n".join(context_chunks)
+
+
+def _load_orchestrator_specs(orchestrator_dir: str, subtask_id: str) -> list[dict]:
+    agents_file_path = os.path.join(orchestrator_dir, f"{subtask_id}_output.json")
+    if not os.path.exists(agents_file_path):
+        raise OrchestratorOutputError(
+            f"Missing orchestrator output for subtask '{subtask_id}': {agents_file_path}"
+        )
+
+    try:
+        with open(agents_file_path, "r") as f:
+            specs = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise OrchestratorOutputError(
+            f"Invalid orchestrator JSON for subtask '{subtask_id}': {agents_file_path}"
+        ) from exc
+
+    if not isinstance(specs, list) or not specs:
+        raise OrchestratorOutputError(
+            f"Orchestrator output for subtask '{subtask_id}' must be a non-empty list."
+        )
+
+    for index, spec in enumerate(specs):
+        if not isinstance(spec, dict):
+            raise OrchestratorOutputError(
+                f"Orchestrator worker spec {index} for subtask '{subtask_id}' must be an object."
+            )
+        missing = sorted(REQUIRED_WORKER_SPEC_KEYS - set(spec))
+        if missing:
+            raise OrchestratorOutputError(
+                f"Orchestrator worker spec {index} for subtask '{subtask_id}' is missing keys: {missing}."
+            )
+
+    return specs
 
 
 def create_workflow(user_prompt: str) -> str:
@@ -211,9 +258,7 @@ def create_workflow(user_prompt: str) -> str:
                     },
                     lf_parent=subtask_span,
                 )
-                agents_file_path = os.path.join(orchestrator_dir, f"{st.id}_output.json")
-                with open(agents_file_path, "r") as f:
-                    subtask_specs[st.id] = json.load(f)
+                subtask_specs[st.id] = _load_orchestrator_specs(orchestrator_dir, st.id)
                 orchestrated_subtasks.add(st.id)
                 observer.end(
                     subtask_span,
@@ -254,7 +299,7 @@ def create_workflow(user_prompt: str) -> str:
 
                 worker_specs = subtask_specs.get(st.id, [])
                 if not worker_specs:
-                    raise ValueError(f"No orchestrator output found for subtask '{st.id}'.")
+                    raise OrchestratorOutputError(f"No orchestrator output found for subtask '{st.id}'.")
 
                 subtask_outputs: list[str] = []
                 for agent_spec in worker_specs:
@@ -289,11 +334,18 @@ def create_workflow(user_prompt: str) -> str:
                         prompt=agent_spec["prompt"],
                         context=context,
                     )
-                    output_path = worker.work(lf_parent=worker_span)
-                    if output_path is None:
-                        raise ValueError(
-                            f"Worker agent '{agent_spec['agent_id']}' failed to produce valid JSON output."
+                    try:
+                        output_path = worker.work(lf_parent=worker_span)
+                    except MalformedAgentResponseError as exc:
+                        observer.end(
+                            worker_span,
+                            output={"error": str(exc)},
+                            level="ERROR",
+                            status_message=str(exc),
                         )
+                        raise WorkerExecutionError(
+                            f"Worker '{agent_id}' failed for subtask '{subtask_id}': {exc}"
+                        ) from exc
                     subtask_outputs.append(output_path)
                     observer.end(worker_span, output={"output_path": output_path})
 

@@ -2,6 +2,7 @@ import json
 from typing import Optional
 
 from elvex.agents.contracts import OrchestratorPlan
+from elvex.agents.retry import call_json_agent_with_retry
 from elvex.llms.types import AgentConfig
 from elvex.utils.loader import load_prompt, parse_json, save_output_json_orchestrator
 
@@ -28,11 +29,21 @@ class OrchestratorAgent:
             {"role": "user", "content": prompt},
         ]
 
-        response = self.client.chat(
+        def _parse_and_validate(response_text: str):
+            response_parsed = parse_json(response_text)
+            OrchestratorPlan.model_validate(response_parsed)
+            return response_parsed
+
+        response_parsed, _ = call_json_agent_with_retry(
+            client=self.client,
             messages=messages,
-            config=self.agent_config,
-            lf_parent=lf_parent,
-            observation_name="OrchestratorAgent.chat",
+            parse_and_validate=_parse_and_validate,
+            error_context=f"OrchestratorAgent for subtask '{subtask['id']}'",
+            chat_kwargs={
+                "config": self.agent_config,
+                "lf_parent": lf_parent,
+                "observation_name": "OrchestratorAgent.chat",
+            },
             observation_metadata={
                 "agent": "OrchestratorAgent",
                 "workflow_stage": "orchestrator",
@@ -40,9 +51,6 @@ class OrchestratorAgent:
                 "subtask_id": subtask["id"],
             },
         )
-        response_text = response.text if hasattr(response, "text") else response
-        response_parsed = parse_json(response_text)
-        OrchestratorPlan.model_validate(response_parsed)
 
         orchestrator_path = save_output_json_orchestrator(response_parsed)
 

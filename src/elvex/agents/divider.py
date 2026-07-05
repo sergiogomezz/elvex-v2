@@ -2,8 +2,9 @@ import json
 from typing import Optional, Union
 
 from elvex.agents.contracts import TaskDividerOutput
+from elvex.agents.retry import call_json_agent_with_retry
 from elvex.llms.types import AgentConfig
-from elvex.utils.loader import load_prompt, save_output_json
+from elvex.utils.loader import load_prompt, parse_json, save_output_json
 
 DIVIDER_PROMPT_PATH = "task_divider_prompt.md"
 
@@ -26,21 +27,28 @@ class TaskDividerAgent:
             )
             messages.append({"role": "user", "content": f"Evaluator feedback:\n{feedback_text}"})
     
-        response = self.client.chat(
+        def _parse_and_validate(response_text: str):
+            response_parsed = parse_json(response_text)
+            TaskDividerOutput.model_validate(response_parsed)
+            save_output_json(response_parsed, "divider")
+            return response_parsed
+
+        response_parsed, _ = call_json_agent_with_retry(
+            client=self.client,
             messages=messages,
-            config=self.agent_config,
-            lf_parent=lf_parent,
-            observation_name="TaskDividerAgent.chat",
+            parse_and_validate=_parse_and_validate,
+            error_context="TaskDividerAgent",
+            chat_kwargs={
+                "config": self.agent_config,
+                "lf_parent": lf_parent,
+                "observation_name": "TaskDividerAgent.chat",
+            },
             observation_metadata={
                 "agent": "TaskDividerAgent",
                 "workflow_stage": "divider",
                 "has_evaluator_feedback": bool(evaluator_feedback),
             },
         )
-        response_text = response.text if hasattr(response, "text") else response
-
-        response_parsed = save_output_json(response_text, "divider")
-        TaskDividerOutput.model_validate(response_parsed)
         
         return response_parsed
 

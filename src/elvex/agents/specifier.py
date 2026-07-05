@@ -1,6 +1,7 @@
 from typing import Optional
 
 from elvex.agents.contracts import TaskSpecifierOutput
+from elvex.agents.retry import call_json_agent_with_retry
 from elvex.llms.types import AgentConfig
 from elvex.utils.loader import load_prompt, parse_json
 
@@ -17,21 +18,26 @@ class TaskSpecifierAgent:
             {"role": "user", "content": user_prompt}
         ]
 
-        response = self.client.chat(
+        def _parse_and_validate(response_text: str):
+            response_parsed = parse_json(response_text)
+            TaskSpecifierOutput.model_validate(response_parsed)
+            return response_parsed
+
+        _, response_text = call_json_agent_with_retry(
+            client=self.client,
             messages=messages,
-            config=self.agent_config,
-            lf_parent=lf_parent,
-            observation_name="TaskSpecifierAgent.chat",
+            parse_and_validate=_parse_and_validate,
+            error_context="TaskSpecifierAgent",
+            chat_kwargs={
+                "config": self.agent_config,
+                "lf_parent": lf_parent,
+                "observation_name": "TaskSpecifierAgent.chat",
+            },
             observation_metadata={
                 "agent": "TaskSpecifierAgent",
                 "workflow_stage": "specifier",
             },
         )
-        response_text = response.text if hasattr(response, "text") else response
-        
-        response_parsed = parse_json(response_text)
-        TaskSpecifierOutput.model_validate(response_parsed)
-
         return response_text
 
     def _build_agent_config(self, agent_config: Optional[AgentConfig]) -> AgentConfig:

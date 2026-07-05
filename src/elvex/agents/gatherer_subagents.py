@@ -4,6 +4,7 @@ import json
 import os
 from typing import Any
 
+from elvex.agents.retry import call_json_agent_with_retry
 from elvex.utils.loader import get_latest_task_output_dir, load_prompt, parse_json
 
 SUBAGENTS_GATHERER_PROMPT_PATH = "subagents_gatherer_prompt.md"
@@ -49,10 +50,15 @@ class GathererSubagents:
             {"role": "user", "content": user_message},
         ]
 
-        response = self.client.chat(
+        response_parsed, _ = call_json_agent_with_retry(
+            client=self.client,
             messages=messages,
-            lf_parent=lf_parent,
-            observation_name="GathererSubagents.chat",
+            parse_and_validate=parse_json,
+            error_context=f"GathererSubagents for subtask '{subtask_id}'",
+            chat_kwargs={
+                "lf_parent": lf_parent,
+                "observation_name": "GathererSubagents.chat",
+            },
             observation_metadata={
                 "agent": "GathererSubagents",
                 "workflow_stage": "gather_subagents",
@@ -60,8 +66,6 @@ class GathererSubagents:
                 "subtask_id": subtask_id,
             },
         )
-        response_text = response.text if hasattr(response, "text") else response
-        response_parsed = parse_json(response_text)
 
         normalized = {
             "task_desc": response_parsed.get("task_desc", task_desc),
