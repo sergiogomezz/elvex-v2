@@ -12,6 +12,7 @@ for path in (ROOT, SRC):
         sys.path.insert(0, str(path))
 
 from elvex.core.workflow import create_workflow
+from elvex.llms.errors import LLMProviderError
 from elvex.utils.utils import landing_intro, loading_animation
 
 
@@ -36,14 +37,22 @@ def main() -> int:
         return 0
     
     stop_loading = loading_animation()
+    error = None
+    result = None
     try:
         result = create_workflow(user_prompt)
+    except LLMProviderError as exc:
+        error = exc
     finally:
         stop_loading()
         print()
 
+    if error is not None:
+        print(f"Error: {error}")
+        return 1
+
     print(result)
-    return 1
+    return 0
 
 
 if __name__ == "__main__":

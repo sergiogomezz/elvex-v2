@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from elvex.llms.types import AgentConfig, ChatResponse, Message
+from elvex.llms.errors import LLMQuotaError
 from elvex.observability import get_observer
 
 
@@ -169,6 +170,11 @@ class OpenAIClient:
                 status_message=str(exc),
                 metadata={"latency_ms": elapsed_ms},
             )
+            if _is_insufficient_quota_error(exc):
+                raise LLMQuotaError(
+                    "Insufficient quota on OpenAI API. Check your billing or usage limits, "
+                    "or switch PROVIDER_USED to another configured provider."
+                ) from exc
             raise
 
 
@@ -221,3 +227,20 @@ def _extract_usage_dict(usage: Any) -> Optional[Dict[str, Any]]:
     if total_tokens is not None:
         usage_dict["total"] = total_tokens
     return usage_dict or None
+
+
+def _is_insufficient_quota_error(exc: Exception) -> bool:
+    error_code = getattr(exc, "code", None)
+    if error_code == "insufficient_quota":
+        return True
+
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        body_error = body.get("error")
+        if isinstance(body_error, dict) and body_error.get("code") == "insufficient_quota":
+            return True
+        if body.get("code") == "insufficient_quota":
+            return True
+
+    message = str(exc).lower()
+    return "insufficient_quota" in message or "insufficient quota" in message
