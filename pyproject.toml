@@ -41,6 +41,7 @@ dependencies = [
   "langfuse",
   "simpleeval>=1.0.7",
   "pydantic-settings>=2.14.1",
+  "fastmcp>=3.4.2",
 ]
 
 [tool.setuptools]
