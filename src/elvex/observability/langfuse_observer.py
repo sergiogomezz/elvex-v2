@@ -1,7 +1,20 @@
 from __future__ import annotations
 
-import os
 from typing import Any, Dict, Optional
+
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class LangfuseSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+
+    public_key: Optional[str] = Field(default=None, alias="LANGFUSE_PUBLIC_KEY")
+    secret_key: Optional[str] = Field(default=None, alias="LANGFUSE_SECRET_KEY")
+    base_url: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("LANGFUSE_BASE_URL", "LANGFUSE_HOST"),
+    )
 
 
 class LangfuseObserver:
@@ -9,11 +22,12 @@ class LangfuseObserver:
 
     def __init__(self) -> None:
         self._enabled = False
-        self._client = None
+        self._client: Any = None
 
-        public_key = _clean_env("LANGFUSE_PUBLIC_KEY")
-        secret_key = _clean_env("LANGFUSE_SECRET_KEY")
-        base_url = _clean_env("LANGFUSE_BASE_URL")
+        settings = LangfuseSettings()
+        public_key = _clean_value(settings.public_key)
+        secret_key = _clean_value(settings.secret_key)
+        base_url = _clean_value(settings.base_url)
 
         if not public_key or not secret_key:
             return
@@ -26,7 +40,7 @@ class LangfuseObserver:
                 "secret_key": secret_key,
             }
             if base_url:
-                kwargs["host"] = base_url
+                kwargs["base_url"] = base_url
             self._client = Langfuse(**kwargs)
             self._enabled = True
         except Exception:
@@ -156,8 +170,7 @@ class LangfuseObserver:
             return
 
 
-def _clean_env(key: str) -> Optional[str]:
-    raw = os.getenv(key)
+def _clean_value(raw: Optional[str]) -> Optional[str]:
     if raw is None:
         return None
     value = raw.strip().strip('"').strip("'")
