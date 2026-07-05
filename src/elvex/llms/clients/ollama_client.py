@@ -65,6 +65,7 @@ class OllamaClient:
             input_payload=request_messages,
             metadata={
                 "provider": "ollama",
+                "model": selected_model,
                 "temperature": temperature,
                 "max_output_tokens": max_tokens,
                 **observation_metadata,
@@ -73,7 +74,14 @@ class OllamaClient:
         started_at = time.perf_counter()
 
         try:
-            response = chat(model=selected_model, messages=request_messages, options=options or None)
+            request_kwargs: Dict[str, Any] = {
+                "model": selected_model,
+                "messages": request_messages,
+            }
+            if options:
+                request_kwargs["options"] = options
+
+            response = chat(**request_kwargs)
             content = (
                 response["message"]["content"]
                 if isinstance(response, dict)
@@ -89,7 +97,7 @@ class OllamaClient:
                 metadata={"latency_ms": elapsed_ms},
             )
 
-            return ChatResponse(text=content, usage=getattr(response, "eval_count", None), raw=response)
+            return ChatResponse(text=content, usage=usage, raw=response)
         except Exception as exc:
             elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
             observer.end(

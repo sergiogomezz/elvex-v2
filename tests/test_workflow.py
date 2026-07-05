@@ -3,17 +3,29 @@ import json
 from elvex.core import workflow
 
 
-class NoopObserver:
+class RecordingObserver:
+    def __init__(self):
+        self.traces = []
+        self.spans = []
+        self.ends = []
+        self.flushed = False
+
     def start_trace(self, **kwargs):
-        return object()
+        trace = {"type": "trace", **kwargs}
+        self.traces.append(trace)
+        return trace
 
     def start_span(self, **kwargs):
-        return object()
+        span = {"type": "span", **kwargs}
+        self.spans.append(span)
+        return span
 
     def end(self, *args, **kwargs):
+        self.ends.append({"args": args, **kwargs})
         return None
 
     def flush(self):
+        self.flushed = True
         return None
 
 
@@ -65,6 +77,7 @@ class FakeEvaluatorAgent:
 
 
 def test_create_workflow_runs_dependency_order_and_returns_final_answer(tmp_path, monkeypatch):
+    observer = RecordingObserver()
     records = {
         "orchestrated": [],
         "worker_contexts": {},
@@ -144,7 +157,9 @@ def test_create_workflow_runs_dependency_order_and_returns_final_answer(tmp_path
             records["final_task_desc"] = task_desc
             return "final answer"
 
-    monkeypatch.setattr(workflow, "get_observer", lambda: NoopObserver())
+    monkeypatch.setenv("PROVIDER_USED", "openai")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
+    monkeypatch.setattr(workflow, "get_observer", lambda: observer)
     monkeypatch.setattr(workflow, "get_llm_client", lambda: object())
     monkeypatch.setattr(workflow, "TaskSpecifierAgent", FakeSpecifierAgent)
     monkeypatch.setattr(workflow, "TaskDividerAgent", FakeDividerAgent)
@@ -163,3 +178,29 @@ def test_create_workflow_runs_dependency_order_and_returns_final_answer(tmp_path
     assert records["worker_contexts"]["T1"] == ""
     assert "answer from T1" in records["worker_contexts"]["T2"]
     assert '"subtask_id": "T1"' in records["worker_contexts"]["T2"]
+    assert observer.traces[0]["name"] == "create_workflow"
+    assert observer.traces[0]["metadata"] == {
+        "workflow_stage": "workflow",
+        "workflow_version": "v1",
+        "original_user_prompt": "Build a demo answer",
+        "provider": "openai",
+        "model": "gpt-test",
+    }
+    assert [span["name"] for span in observer.spans] == [
+        "Specify Task",
+        "Divide and Evaluate Round 1",
+        "Orchestrate Subtask T1",
+        "Orchestrate Subtask T2",
+        "Execute Subtask T1",
+        "Worker T1/T1_A1 (worker)",
+        "Execute Subtask T2",
+        "Worker T2/T2_A1 (worker)",
+        "Final Gather demo_task",
+    ]
+    assert observer.spans[4]["metadata"]["workflow_stage"] == "execute_subtask"
+    assert observer.spans[4]["metadata"]["subtask_id"] == "T1"
+    assert observer.spans[5]["metadata"]["workflow_stage"] == "execute_worker"
+    assert observer.spans[5]["metadata"]["agent_id"] == "T1_A1"
+    assert observer.spans[5]["metadata"]["agent_type"] == "worker"
+    assert observer.ends[-1]["metadata"]["task_desc"] == "demo_task"
+    assert observer.ends[-1]["metadata"]["number_of_subtasks"] == 2

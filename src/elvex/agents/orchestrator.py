@@ -35,6 +35,8 @@ class OrchestratorAgent:
             observation_name="OrchestratorAgent.chat",
             observation_metadata={
                 "agent": "OrchestratorAgent",
+                "workflow_stage": "orchestrator",
+                "task_desc": task_desc,
                 "subtask_id": subtask["id"],
             },
         )

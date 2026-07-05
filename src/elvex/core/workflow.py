@@ -1,6 +1,9 @@
 import json
 import os
 
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from elvex.llms.types import AgentConfig
 from elvex.agents.base_worker_agent import BaseWorkingAgent
 from elvex.agents.gatherer_subagents import GathererSubagents
@@ -12,6 +15,36 @@ from elvex.agents.orchestrator import OrchestratorAgent
 from elvex.llms.registry import get_llm_client
 from elvex.observability import get_observer
 from elvex.core.task_graph import build_task_graph, get_ready_subtasks, subtasks_from_divider_output
+
+WORKFLOW_VERSION = "v1"
+
+
+class WorkflowObservabilitySettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
+
+    provider_used: str = Field(default="unknown", alias="PROVIDER_USED")
+    openai_model: str | None = Field(default=None, alias="OPENAI_MODEL")
+    claude_model: str | None = Field(default=None, alias="CLAUDE_MODEL")
+    ollama_model: str | None = Field(default=None, alias="OLLAMA_MODEL")
+
+
+def _clean_env_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip().strip('"').strip("'")
+    return value or None
+
+
+def _provider_model_metadata() -> dict[str, str | None]:
+    settings = WorkflowObservabilitySettings()
+    provider = (_clean_env_value(settings.provider_used) or "unknown").lower()
+    model_by_provider = {
+        "openai": settings.openai_model,
+        "claude": settings.claude_model,
+        "ollama": settings.ollama_model,
+    }
+    model = _clean_env_value(model_by_provider.get(provider))
+    return {"provider": provider, "model": model}
 
 
 def _build_dependency_context(dependency_output_paths: list[str]) -> str:
@@ -30,10 +63,17 @@ def _build_dependency_context(dependency_output_paths: list[str]) -> str:
 
 def create_workflow(user_prompt: str) -> str:
     observer = get_observer()
+    provider_model = _provider_model_metadata()
+    root_metadata = {
+        "workflow_stage": "workflow",
+        "workflow_version": WORKFLOW_VERSION,
+        "original_user_prompt": user_prompt,
+        **provider_model,
+    }
     trace = observer.start_trace(
         name="create_workflow",
         input_payload={"user_prompt": user_prompt},
-        metadata={"provider": os.getenv("PROVIDER_USED", "unknown")},
+        metadata=root_metadata,
     )
 
     # getting client. It may be possible to get a different client for each agent
@@ -45,8 +85,13 @@ def create_workflow(user_prompt: str) -> str:
     specifier_agent = TaskSpecifierAgent(client=default_client, agent_config=specifier_agent_config)
     specifier_span = observer.start_span(
         parent=trace,
-        name="workflow.specifier",
+        name="Specify Task",
         input_payload={"user_prompt": user_prompt},
+        metadata={
+            **provider_model,
+            "workflow_stage": "specifier",
+            "workflow_version": WORKFLOW_VERSION,
+        },
     )
     try:
         specifier_result = specifier_agent.specify_task(user_prompt, lf_parent=specifier_span)
@@ -83,8 +128,15 @@ def create_workflow(user_prompt: str) -> str:
         for round_num in range(1, max_rounds + 1):
             round_span = observer.start_span(
                 parent=trace,
-                name="workflow.divide_evaluate_round",
+                name=f"Divide and Evaluate Round {round_num}",
                 input_payload={"round": round_num, "has_feedback": bool(evaluator_feedback)},
+                metadata={
+                    **provider_model,
+                    "workflow_stage": "divide_evaluate",
+                    "workflow_version": WORKFLOW_VERSION,
+                    "round": round_num,
+                    "has_evaluator_feedback": bool(evaluator_feedback),
+                },
             )
             divider_result = divider_agent.divide_tasks(
                 specifier_result,
@@ -117,6 +169,11 @@ def create_workflow(user_prompt: str) -> str:
         build_task_graph(subtasks)
 
         task_desc = divider_result.get("task_desc", "unnamed_task")
+        root_metadata = {
+            **root_metadata,
+            "task_desc": task_desc,
+            "number_of_subtasks": len(subtasks),
+        }
 
         # Invoke orchestrator for each subtask in dependency order
         orchestrator_agent_config = AgentConfig(temperature=0.2)
@@ -134,8 +191,15 @@ def create_workflow(user_prompt: str) -> str:
             for st in ready_subtasks:
                 subtask_span = observer.start_span(
                     parent=trace,
-                    name="workflow.orchestrate_subtask",
+                    name=f"Orchestrate Subtask {st.id}",
                     input_payload={"subtask_id": st.id, "title": st.title},
+                    metadata={
+                        **provider_model,
+                        "workflow_stage": "orchestrate_subtask",
+                        "workflow_version": WORKFLOW_VERSION,
+                        "task_desc": task_desc,
+                        "subtask_id": st.id,
+                    },
                 )
                 orchestrator_dir = orchestrator_agent.design_agents(
                     task_desc,
@@ -172,8 +236,15 @@ def create_workflow(user_prompt: str) -> str:
             for st in ready_subtasks:
                 execution_span = observer.start_span(
                     parent=trace,
-                    name="workflow.execute_subtask",
+                    name=f"Execute Subtask {st.id}",
                     input_payload={"subtask_id": st.id},
+                    metadata={
+                        **provider_model,
+                        "workflow_stage": "execute_subtask",
+                        "workflow_version": WORKFLOW_VERSION,
+                        "task_desc": task_desc,
+                        "subtask_id": st.id,
+                    },
                 )
                 dependency_paths: list[str] = []
                 for dep_id in st.depends_on:
@@ -187,21 +258,33 @@ def create_workflow(user_prompt: str) -> str:
 
                 subtask_outputs: list[str] = []
                 for agent_spec in worker_specs:
+                    agent_id = agent_spec["agent_id"]
+                    agent_type = agent_spec["agent_type"]
+                    subtask_id = agent_spec["subtask_id"]
                     worker_span = observer.start_span(
                         parent=execution_span,
-                        name="workflow.execute_worker",
+                        name=f"Worker {subtask_id}/{agent_id} ({agent_type})",
                         input_payload={
-                            "agent_id": agent_spec["agent_id"],
-                            "agent_type": agent_spec["agent_type"],
-                            "subtask_id": agent_spec["subtask_id"],
+                            "agent_id": agent_id,
+                            "agent_type": agent_type,
+                            "subtask_id": subtask_id,
+                        },
+                        metadata={
+                            **provider_model,
+                            "workflow_stage": "execute_worker",
+                            "workflow_version": WORKFLOW_VERSION,
+                            "task_desc": task_desc,
+                            "subtask_id": subtask_id,
+                            "agent_id": agent_id,
+                            "agent_type": agent_type,
                         },
                     )
                     worker = BaseWorkingAgent(
                         client=default_client,
                         task_id=task_desc,
-                        agent_id=agent_spec["agent_id"],
-                        subtask_id=agent_spec["subtask_id"],
-                        agent_type=agent_spec["agent_type"],
+                        agent_id=agent_id,
+                        subtask_id=subtask_id,
+                        agent_type=agent_type,
                         objective=agent_spec["objective"],
                         prompt=agent_spec["prompt"],
                         context=context,
@@ -225,13 +308,19 @@ def create_workflow(user_prompt: str) -> str:
         subtasks_gatherer = GathererSubtasks(client=default_client)
         final_gather_span = observer.start_span(
             parent=trace,
-            name="workflow.final_gather",
+            name=f"Final Gather {task_desc}",
             input_payload={"task_desc": task_desc},
+            metadata={
+                **provider_model,
+                "workflow_stage": "final_gather",
+                "workflow_version": WORKFLOW_VERSION,
+                "task_desc": task_desc,
+            },
         )
         final_answer = subtasks_gatherer.gather_subtasks(task_desc, lf_parent=final_gather_span)
         observer.end(final_gather_span, output={"status": "ok"})
 
-        observer.end(trace, output={"task_desc": task_desc, "status": "ok"})
+        observer.end(trace, output={"task_desc": task_desc, "status": "ok"}, metadata=root_metadata)
         observer.flush()
         return final_answer
     except Exception as exc:

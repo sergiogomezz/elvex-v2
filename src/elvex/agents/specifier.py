@@ -22,7 +22,10 @@ class TaskSpecifierAgent:
             config=self.agent_config,
             lf_parent=lf_parent,
             observation_name="TaskSpecifierAgent.chat",
-            observation_metadata={"agent": "TaskSpecifierAgent"},
+            observation_metadata={
+                "agent": "TaskSpecifierAgent",
+                "workflow_stage": "specifier",
+            },
         )
         response_text = response.text if hasattr(response, "text") else response
         

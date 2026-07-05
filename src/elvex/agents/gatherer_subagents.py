@@ -55,6 +55,8 @@ class GathererSubagents:
             observation_name="GathererSubagents.chat",
             observation_metadata={
                 "agent": "GathererSubagents",
+                "workflow_stage": "gather_subagents",
+                "task_desc": task_desc,
                 "subtask_id": subtask_id,
             },
         )

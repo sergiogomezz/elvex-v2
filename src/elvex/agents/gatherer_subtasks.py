@@ -43,7 +43,11 @@ class GathererSubtasks:
             messages=messages,
             lf_parent=lf_parent,
             observation_name="GathererSubtasks.chat",
-            observation_metadata={"agent": "GathererSubtasks"},
+            observation_metadata={
+                "agent": "GathererSubtasks",
+                "workflow_stage": "gather_subtasks",
+                "task_desc": task_desc,
+            },
         )
         response_text = response.text if hasattr(response, "text") else response
 

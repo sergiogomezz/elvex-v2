@@ -78,6 +78,8 @@ Required JSON format:
                 observation_name="BaseWorkingAgent.chat",
                 observation_metadata={
                     "agent": "BaseWorkingAgent",
+                    "workflow_stage": "worker",
+                    "task_desc": self.task_id,
                     "agent_id": self.agent_id,
                     "agent_type": self.agent_type,
                     "subtask_id": self.subtask_id,

@@ -33,6 +33,7 @@ class TaskDividerAgent:
             observation_name="TaskDividerAgent.chat",
             observation_metadata={
                 "agent": "TaskDividerAgent",
+                "workflow_stage": "divider",
                 "has_evaluator_feedback": bool(evaluator_feedback),
             },
         )

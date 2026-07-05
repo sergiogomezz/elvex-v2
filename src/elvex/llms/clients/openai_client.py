@@ -16,7 +16,7 @@ from elvex.observability import get_observer
 class OpenAISettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
-    api_key: str = Field(alias="OPENAI_API_KEY")
+    api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     model: Optional[str] = Field(default="gpt-4o-mini", alias="OPENAI_MODEL")
 
 
@@ -24,7 +24,10 @@ class OpenAIClient:
     
     def __init__(self):
         self.settings = OpenAISettings()
-        self.client = OpenAI(api_key=self.settings.api_key)
+        api_key = self.settings.api_key
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY is required when PROVIDER_USED=openai.")
+        self.client = OpenAI(api_key=api_key)
         self.default_model = self.settings.model
 
     def chat(
@@ -69,6 +72,7 @@ class OpenAIClient:
             input_payload=input_messages,
             metadata={
                 "provider": "openai",
+                "model": selected_model,
                 "temperature": temperature,
                 "max_output_tokens": max_tokens,
                 "tool_count": len(tools or []),
@@ -78,13 +82,18 @@ class OpenAIClient:
         started_at = time.perf_counter()
 
         try:
-            resp = self.client.responses.create(
-                model=selected_model,
-                input=input_messages,
-                temperature=temperature,
-                tools=tools,
-                max_output_tokens=max_tokens,
-            )
+            request_kwargs: Dict[str, Any] = {
+                "model": selected_model,
+                "input": input_messages,
+            }
+            if temperature is not None:
+                request_kwargs["temperature"] = temperature
+            if tools is not None:
+                request_kwargs["tools"] = tools
+            if max_tokens is not None:
+                request_kwargs["max_output_tokens"] = max_tokens
+
+            resp = self.client.responses.create(**request_kwargs)
 
             # Handle function tools in-loop for providers/models that emit function_call output items.
             if tools and tool_executor:
@@ -100,6 +109,8 @@ class OpenAIClient:
                     for function_call in function_calls:
                         call_id = function_call.get("call_id")
                         name = function_call.get("name")
+                        if not isinstance(call_id, str) or not isinstance(name, str):
+                            continue
                         raw_arguments = function_call.get("arguments", "{}")
                         try:
                             parsed_arguments = (
@@ -107,15 +118,20 @@ class OpenAIClient:
                             )
                         except json.JSONDecodeError:
                             parsed_arguments = {}
+                        if not isinstance(parsed_arguments, dict):
+                            parsed_arguments = {}
 
                         tool_span = observer.start_span(
                             parent=generation or lf_parent,
                             name=f"tool.{name}",
                             input_payload=parsed_arguments,
                             metadata={
+                                **observation_metadata,
                                 "tool_name": name,
                                 "tool_call_id": call_id,
                                 "provider": "openai",
+                                "model": selected_model,
+                                "workflow_stage": "tool_call",
                             },
                         )
 
@@ -136,17 +152,21 @@ class OpenAIClient:
                             }
                         )
 
-                    resp = self.client.responses.create(
-                        model=selected_model,
-                        previous_response_id=getattr(resp, "id", None),
-                        input=tool_outputs,
-                        temperature=temperature,
-                        tools=tools,
-                        max_output_tokens=max_tokens,
-                    )
+                    tool_request_kwargs: Dict[str, Any] = {
+                        "model": selected_model,
+                        "previous_response_id": getattr(resp, "id", None),
+                        "input": tool_outputs,
+                    }
+                    if temperature is not None:
+                        tool_request_kwargs["temperature"] = temperature
+                    if tools is not None:
+                        tool_request_kwargs["tools"] = tools
+                    if max_tokens is not None:
+                        tool_request_kwargs["max_output_tokens"] = max_tokens
 
-            usage = getattr(resp, "usage", None)
-            usage_data = usage.model_dump() if hasattr(usage, "model_dump") else usage
+                    resp = self.client.responses.create(**tool_request_kwargs)
+
+            usage_data = _serialize_usage_obj(getattr(resp, "usage", None))
             elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
             observer.end(
                 generation,
@@ -227,6 +247,14 @@ def _extract_usage_dict(usage: Any) -> Optional[Dict[str, Any]]:
     if total_tokens is not None:
         usage_dict["total"] = total_tokens
     return usage_dict or None
+
+
+def _serialize_usage_obj(usage_obj: Any) -> Any:
+    if usage_obj is None:
+        return None
+    if hasattr(usage_obj, "model_dump"):
+        return usage_obj.model_dump()
+    return usage_obj
 
 
 def _is_insufficient_quota_error(exc: Exception) -> bool:

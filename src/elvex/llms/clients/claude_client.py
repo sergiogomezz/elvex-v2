@@ -14,7 +14,7 @@ from elvex.observability import get_observer
 class ClaudeSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", populate_by_name=True)
 
-    api_key: str = Field(alias="ANTHROPIC_API_KEY")
+    api_key: Optional[str] = Field(default=None, alias="ANTHROPIC_API_KEY")
     model: str = Field(default="claude-3-haiku-20240307", alias="CLAUDE_MODEL")
 
 
@@ -23,7 +23,10 @@ class ClaudeClient:
 
     def __init__(self):
         self.settings = ClaudeSettings()
-        self.client = Anthropic(api_key=self.settings.api_key)
+        api_key = self.settings.api_key
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY is required when PROVIDER_USED=claude.")
+        self.client = Anthropic(api_key=api_key)
         self.default_model = self.settings.model
 
     def chat(
@@ -42,7 +45,7 @@ class ClaudeClient:
         cfg = config or AgentConfig()
 
         system_prompt = system_prompt if system_prompt is not None else cfg.system_prompt
-        model = model if model is not None else cfg.model or self.default_model
+        selected_model = model or cfg.model or self.default_model
         temperature = temperature if temperature is not None else cfg.temperature
         max_tokens = max_output_tokens if max_output_tokens is not None else cfg.max_output_tokens
         lf_parent = kwargs.get("lf_parent")
@@ -70,10 +73,11 @@ class ClaudeClient:
         generation = observer.start_generation(
             parent=lf_parent,
             name=observation_name,
-            model=model,
+            model=selected_model,
             input_payload={"system": system, "messages": converted_messages},
             metadata={
                 "provider": "claude",
+                "model": selected_model,
                 "temperature": temperature,
                 "max_output_tokens": max_tokens,
                 **observation_metadata,
@@ -82,13 +86,17 @@ class ClaudeClient:
         started_at = time.perf_counter()
 
         try:
-            response = self.client.messages.create(
-                model=model,
-                system=system,
-                messages=converted_messages,
-                temperature=temperature,
-                max_tokens=max_tokens or 1024,
-            )
+            request_kwargs: Dict[str, Any] = {
+                "model": selected_model,
+                "messages": converted_messages,
+                "max_tokens": max_tokens or 1024,
+            }
+            if system is not None:
+                request_kwargs["system"] = system
+            if temperature is not None:
+                request_kwargs["temperature"] = temperature
+
+            response = self.client.messages.create(**request_kwargs)
 
             text = "".join([block.text for block in response.content if hasattr(block, "text")])
             usage_obj = getattr(response, "usage", None)
@@ -100,12 +108,12 @@ class ClaudeClient:
                 usage=usage,
                 metadata={
                     "latency_ms": elapsed_ms,
-                    "raw_usage": usage_obj.model_dump() if hasattr(usage_obj, "model_dump") else str(usage_obj),
+                    "raw_usage": _serialize_usage_obj(usage_obj),
                 },
             )
             return ChatResponse(
                 text=text,
-                usage=usage_obj,
+                usage=usage,
             )
         except Exception as exc:
             elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
@@ -135,3 +143,11 @@ def _extract_usage_dict(usage_obj: Any) -> Optional[Dict[str, Any]]:
     total = (input_tokens or 0) + (output_tokens or 0)
     usage["total"] = total
     return usage
+
+
+def _serialize_usage_obj(usage_obj: Any) -> Any:
+    if usage_obj is None:
+        return None
+    if hasattr(usage_obj, "model_dump"):
+        return usage_obj.model_dump()
+    return str(usage_obj)

@@ -29,7 +29,11 @@ class TaskEvaluatorAgent:
             config=self.agent_config,
             lf_parent=lf_parent,
             observation_name="TaskEvaluatorAgent.chat",
-            observation_metadata={"agent": "TaskEvaluatorAgent"},
+            observation_metadata={
+                "agent": "TaskEvaluatorAgent",
+                "workflow_stage": "evaluator",
+                "task_desc": divider_agent_result.get("task_desc"),
+            },
         )
         response_text = response.text if hasattr(response, "text") else response
 
