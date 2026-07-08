@@ -46,6 +46,9 @@ dependencies = [
   "fastapi>=0.139.0",
 ]
 
+[project.scripts]
+elvex = "elvex.cli.main:main"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

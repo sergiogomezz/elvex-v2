@@ -57,11 +57,11 @@ Optional observability keys (Langfuse):
 
 4. Run the local workflow:
 ```bash
-python scripts/main_local.py
+elvex
 ```
 or
 ```bash
-python scripts/main_local.py --prompt "Plan a 7-day trip to Malaysia"
+elvex --prompt "Plan a 7-day trip to Malaysia"
 ```
 
 ## Langfuse Tracing
