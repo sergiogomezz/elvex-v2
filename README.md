@@ -64,6 +64,12 @@ or
 elvex --prompt "Plan a 7-day trip to Malaysia"
 ```
 
+5. Run the API locally:
+```bash
+uv run uvicorn elvex.api.app:app --reload
+```
+Then open the interactive docs at `http://127.0.0.1:8000/docs`.
+
 ## Langfuse Tracing
 When `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are configured, the workflow sends traces to Langfuse with:
 - root trace for the full workflow
