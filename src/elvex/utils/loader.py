@@ -4,7 +4,7 @@ import re
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime
-from typing import Iterator
+from typing import Any, Generator
 
 SAFE_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 _CURRENT_RUN_OUTPUT_DIR: ContextVar[str | None] = ContextVar("current_run_output_dir", default=None)
@@ -28,45 +28,46 @@ def _safe_join(base_dir: str, *parts: str) -> str:
     return candidate
 
 
-def load_json(path):
+def load_json(path: str) -> Any:
     with open(path, "r") as f:
         result = json.load(f)
     return result
 
-def load_keys(path='keys.json'):
-    with open(path, 'r') as f:
-        return json.load(f)
-    
 
-def get_api_key(keys):
-    api_key = keys.get('openai', {}).get('api_key')
+def load_keys(path: str = "keys.json") -> dict:
+    with open(path, "r") as f:
+        return json.load(f)
+
+
+def get_api_key(keys: dict) -> str:
+    api_key = keys.get("openai", {}).get("api_key")
 
     if not api_key:
         raise ValueError("API key not found in keys.json")
-    
+
     return api_key
 
 
-def load_root_path():
+def load_root_path() -> str:
     base_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.abspath(os.path.join(base_dir, ".."))
     return root_dir
 
 
-def load_project_root_path():
+def load_project_root_path() -> str:
     base_dir = os.path.dirname(os.path.abspath(__file__))
     return os.path.abspath(os.path.join(base_dir, "..", "..", ".."))
 
 
-def load_prompt(prompt_name):
+def load_prompt(prompt_name: str) -> str:
     root_dir = load_root_path()
     prompts_dir = os.path.join(root_dir, "prompts")
     prompt_path = os.path.join(prompts_dir, prompt_name)
-    with open(prompt_path, 'r') as f:
+    with open(prompt_path, "r") as f:
         return f.read()
-    
 
-def parse_json(response):
+
+def parse_json(response: str) -> Any:
     if not isinstance(response, str):
         raise TypeError(f"Expected string response, got: {type(response)}")
 
@@ -105,13 +106,27 @@ def parse_json(response):
         raise ValueError(f"Could not parse the response as JSON. Error: {e}. Response preview: {preview}")
 
 
-def coerce_json(response):
+def coerce_json(response: Any) -> dict | list:
     if isinstance(response, (dict, list)):
         return response
     if isinstance(response, str):
         return parse_json(response)
     raise TypeError(f"Unsupported JSON payload type: {type(response)}")
-    
+
+
+def coerce_json_object(response: Any) -> dict:
+    response_parsed = coerce_json(response)
+    if not isinstance(response_parsed, dict):
+        raise TypeError(f"Expected JSON object, got: {type(response_parsed)}")
+    return response_parsed
+
+
+def coerce_json_list(response: Any) -> list:
+    response_parsed = coerce_json(response)
+    if not isinstance(response_parsed, list):
+        raise TypeError(f"Expected JSON list, got: {type(response_parsed)}")
+    return response_parsed
+
 
 def _runs_outputs_base_dir() -> str:
     return os.path.join(load_project_root_path(), "outputs", "runs")
@@ -123,7 +138,7 @@ def get_run_output_dir(run_id: str) -> str:
 
 
 @contextmanager
-def workflow_output_context(run_id: str) -> Iterator[str]:
+def workflow_output_context(run_id: str) -> Generator[str, None, None]:
     output_dir = get_run_output_dir(run_id)
     os.makedirs(output_dir, exist_ok=True)
     token = _CURRENT_RUN_OUTPUT_DIR.set(output_dir)
@@ -137,18 +152,18 @@ def get_current_run_output_dir() -> str | None:
     return _CURRENT_RUN_OUTPUT_DIR.get()
 
 
-def _task_outputs_base_dir(task_desc):
+def _task_outputs_base_dir(_task_desc: str) -> str:
     current_run_output_dir = get_current_run_output_dir()
     if current_run_output_dir is not None:
         return current_run_output_dir
     return _runs_outputs_base_dir()
 
 
-def _timestamp_dir_name():
+def _timestamp_dir_name() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
-def create_task_output_dir(task_desc):
+def create_task_output_dir(task_desc: str) -> str:
     task_desc = _validate_identifier(task_desc, "task_desc")
     current_run_output_dir = get_current_run_output_dir()
     if current_run_output_dir is not None:
@@ -163,7 +178,7 @@ def create_task_output_dir(task_desc):
     return task_dir
 
 
-def get_latest_task_output_dir(task_desc):
+def get_latest_task_output_dir(task_desc: str) -> str | None:
     task_desc = _validate_identifier(task_desc, "task_desc")
     current_run_output_dir = get_current_run_output_dir()
     if current_run_output_dir is not None:
@@ -184,8 +199,8 @@ def get_latest_task_output_dir(task_desc):
     return os.path.join(base_dir, latest)
 
 
-def save_output_json(response, agent_type, use_latest_dir: bool = False):
-    response_parsed = coerce_json(response)
+def save_output_json(response: Any, agent_type: str, use_latest_dir: bool = False) -> dict:
+    response_parsed = coerce_json_object(response)
     task_desc = _validate_identifier(response_parsed.get("task_desc", "unnamed_task"), "task_desc")
     agent_type = _validate_identifier(agent_type, "agent_type")
     if use_latest_dir:
@@ -201,14 +216,16 @@ def save_output_json(response, agent_type, use_latest_dir: bool = False):
     return response_parsed
 
 
-def save_output_json_orchestrator(response):
-    response_parsed = coerce_json(response)
+def save_output_json_orchestrator(response: Any) -> str:
+    response_parsed = coerce_json_list(response)
     first_item = response_parsed[0]
+    if not isinstance(first_item, dict):
+        raise TypeError(f"Expected orchestrator item to be a JSON object, got: {type(first_item)}")
     task_desc = _validate_identifier(first_item.get("task_desc", "unnamed_task"), "task_desc")
     task_dir = get_latest_task_output_dir(task_desc) or create_task_output_dir(task_desc)
     dir_orchestrator = _safe_join(task_dir, "orchestrator")
     os.makedirs(dir_orchestrator, exist_ok=True)
-    
+
     subtask_id = _validate_identifier(first_item.get("subtask_id", "unknown_subtask"), "subtask_id")
     output_path = _safe_join(dir_orchestrator, f"{subtask_id}_output.json")
 
@@ -218,13 +235,13 @@ def save_output_json_orchestrator(response):
     return dir_orchestrator
 
 
-def save_output_json_agents(response):
-    response_parsed = coerce_json(response)
+def save_output_json_agents(response: Any) -> str:
+    response_parsed = coerce_json_object(response)
     task_desc = _validate_identifier(response_parsed.get("task_desc", "unnamed_task"), "task_desc")
     task_dir = get_latest_task_output_dir(task_desc) or create_task_output_dir(task_desc)
     dir_work_agents = _safe_join(task_dir, "work_agents")
     os.makedirs(dir_work_agents, exist_ok=True)
-    
+
     subtask_id = _validate_identifier(response_parsed.get("subtask_id", "unknown_subtask"), "subtask_id")
     subtask_path = _safe_join(dir_work_agents, subtask_id)
     os.makedirs(subtask_path, exist_ok=True)
