@@ -1,9 +1,13 @@
 import json
 import os
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime
+from typing import Iterator
 
 SAFE_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+_CURRENT_RUN_OUTPUT_DIR: ContextVar[str | None] = ContextVar("current_run_output_dir", default=None)
 
 
 def _validate_identifier(value: str, field_name: str) -> str:
@@ -47,6 +51,11 @@ def load_root_path():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.abspath(os.path.join(base_dir, ".."))
     return root_dir
+
+
+def load_project_root_path():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.abspath(os.path.join(base_dir, "..", "..", ".."))
 
 
 def load_prompt(prompt_name):
@@ -104,9 +113,35 @@ def coerce_json(response):
     raise TypeError(f"Unsupported JSON payload type: {type(response)}")
     
 
+def _runs_outputs_base_dir() -> str:
+    return os.path.join(load_project_root_path(), "outputs", "runs")
+
+
+def get_run_output_dir(run_id: str) -> str:
+    run_id = _validate_identifier(run_id, "run_id")
+    return _safe_join(_runs_outputs_base_dir(), run_id)
+
+
+@contextmanager
+def workflow_output_context(run_id: str) -> Iterator[str]:
+    output_dir = get_run_output_dir(run_id)
+    os.makedirs(output_dir, exist_ok=True)
+    token = _CURRENT_RUN_OUTPUT_DIR.set(output_dir)
+    try:
+        yield output_dir
+    finally:
+        _CURRENT_RUN_OUTPUT_DIR.reset(token)
+
+
+def get_current_run_output_dir() -> str | None:
+    return _CURRENT_RUN_OUTPUT_DIR.get()
+
+
 def _task_outputs_base_dir(task_desc):
-    root_dir = load_root_path()
-    return os.path.join(root_dir, "outputs")
+    current_run_output_dir = get_current_run_output_dir()
+    if current_run_output_dir is not None:
+        return current_run_output_dir
+    return _runs_outputs_base_dir()
 
 
 def _timestamp_dir_name():
@@ -115,6 +150,11 @@ def _timestamp_dir_name():
 
 def create_task_output_dir(task_desc):
     task_desc = _validate_identifier(task_desc, "task_desc")
+    current_run_output_dir = get_current_run_output_dir()
+    if current_run_output_dir is not None:
+        os.makedirs(current_run_output_dir, exist_ok=True)
+        return current_run_output_dir
+
     base_dir = _task_outputs_base_dir(task_desc)
     os.makedirs(base_dir, exist_ok=True)
 
@@ -125,6 +165,10 @@ def create_task_output_dir(task_desc):
 
 def get_latest_task_output_dir(task_desc):
     task_desc = _validate_identifier(task_desc, "task_desc")
+    current_run_output_dir = get_current_run_output_dir()
+    if current_run_output_dir is not None:
+        return current_run_output_dir if os.path.isdir(current_run_output_dir) else None
+
     base_dir = _task_outputs_base_dir(task_desc)
     if not os.path.isdir(base_dir):
         return None

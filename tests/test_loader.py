@@ -25,26 +25,27 @@ def test_parse_json_raises_helpful_error_for_empty_response():
 
 
 def test_save_output_json_uses_safe_task_directory(tmp_path, monkeypatch):
-    monkeypatch.setattr(loader, "load_root_path", lambda: str(tmp_path))
+    monkeypatch.setattr(loader, "load_project_root_path", lambda: str(tmp_path))
 
     payload = {"task_desc": "demo_task", "answer": "ok"}
-    returned = loader.save_output_json(payload, "divider")
+    with loader.workflow_output_context("run_20260709_120000_deadbeef") as output_dir:
+        returned = loader.save_output_json(payload, "divider")
 
     assert returned == payload
-    output_dirs = list((tmp_path / "outputs").glob("*_demo_task"))
-    assert len(output_dirs) == 1
-    assert json.loads((output_dirs[0] / "divider_output.json").read_text()) == payload
+    expected_output_dir = tmp_path / "outputs" / "runs" / "run_20260709_120000_deadbeef"
+    assert output_dir == str(expected_output_dir)
+    assert json.loads((expected_output_dir / "divider_output.json").read_text()) == payload
 
 
 def test_save_output_json_rejects_unsafe_identifiers(tmp_path, monkeypatch):
-    monkeypatch.setattr(loader, "load_root_path", lambda: str(tmp_path))
+    monkeypatch.setattr(loader, "load_project_root_path", lambda: str(tmp_path))
 
     with pytest.raises(ValueError, match="Invalid task_desc"):
         loader.save_output_json({"task_desc": "../escape"}, "divider")
 
 
 def test_save_output_json_orchestrator_rejects_empty_plan(tmp_path, monkeypatch):
-    monkeypatch.setattr(loader, "load_root_path", lambda: str(tmp_path))
+    monkeypatch.setattr(loader, "load_project_root_path", lambda: str(tmp_path))
 
     with pytest.raises(IndexError):
         loader.save_output_json_orchestrator([])

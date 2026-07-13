@@ -1,6 +1,7 @@
 import json
 
 from elvex.core import workflow
+from elvex.utils import loader
 
 
 class RecordingObserver:
@@ -11,7 +12,7 @@ class RecordingObserver:
         self.flushed = False
 
     def start_trace(self, **kwargs):
-        trace = {"type": "trace", **kwargs}
+        trace = {"type": "trace", "id": "trace_test_123", **kwargs}
         self.traces.append(trace)
         return trace
 
@@ -159,6 +160,7 @@ def test_create_workflow_runs_dependency_order_and_returns_final_answer(tmp_path
 
     monkeypatch.setenv("PROVIDER_USED", "openai")
     monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
+    monkeypatch.setattr(loader, "load_project_root_path", lambda: str(tmp_path))
     monkeypatch.setattr(workflow, "get_observer", lambda: observer)
     monkeypatch.setattr(workflow, "get_llm_client", lambda: object())
     monkeypatch.setattr(workflow, "TaskSpecifierAgent", FakeSpecifierAgent)
@@ -169,9 +171,14 @@ def test_create_workflow_runs_dependency_order_and_returns_final_answer(tmp_path
     monkeypatch.setattr(workflow, "GathererSubagents", FakeGathererSubagents)
     monkeypatch.setattr(workflow, "GathererSubtasks", FakeGathererSubtasks)
 
-    result = workflow.create_workflow("Build a demo answer")
+    run = workflow.create_workflow_run("Build a demo answer", run_id="run_20260709_120000_deadbeef")
 
-    assert result == "final answer"
+    assert run.status == "completed"
+    assert run.result == "final answer"
+    assert run.run_id == "run_20260709_120000_deadbeef"
+    assert run.output_dir == str(tmp_path / "outputs" / "runs" / "run_20260709_120000_deadbeef")
+    assert run.trace_id == "trace_test_123"
+    assert (tmp_path / "outputs" / "runs" / "run_20260709_120000_deadbeef").is_dir()
     assert records["orchestrated"] == ["T1", "T2"]
     assert records["gathered_subtasks"] == ["T1", "T2"]
     assert records["final_task_desc"] == "demo_task"
@@ -183,6 +190,8 @@ def test_create_workflow_runs_dependency_order_and_returns_final_answer(tmp_path
         "workflow_stage": "workflow",
         "workflow_version": "v1",
         "original_user_prompt": "Build a demo answer",
+        "run_id": "run_20260709_120000_deadbeef",
+        "output_dir": str(tmp_path / "outputs" / "runs" / "run_20260709_120000_deadbeef"),
         "provider": "openai",
         "model": "gpt-test",
     }

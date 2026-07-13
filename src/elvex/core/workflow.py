@@ -1,5 +1,8 @@
 import json
 import os
+from dataclasses import dataclass
+from datetime import datetime
+from uuid import uuid4
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,6 +23,7 @@ from elvex.agents.orchestrator import OrchestratorAgent
 from elvex.llms.registry import get_llm_client
 from elvex.observability import get_observer
 from elvex.core.task_graph import build_task_graph, get_ready_subtasks, subtasks_from_divider_output
+from elvex.utils.loader import workflow_output_context
 
 WORKFLOW_VERSION = "v1"
 REQUIRED_WORKER_SPEC_KEYS = {
@@ -30,6 +34,15 @@ REQUIRED_WORKER_SPEC_KEYS = {
     "objective",
     "prompt",
 }
+
+
+@dataclass(frozen=True)
+class WorkflowRunResult:
+    status: str
+    result: str
+    run_id: str
+    output_dir: str
+    trace_id: str | None = None
 
 
 class WorkflowObservabilitySettings(BaseSettings):
@@ -58,6 +71,26 @@ def _provider_model_metadata() -> dict[str, str | None]:
     }
     model = _clean_env_value(model_by_provider.get(provider))
     return {"provider": provider, "model": model}
+
+
+def generate_run_id() -> str:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"run_{timestamp}_{uuid4().hex[:8]}"
+
+
+def _extract_trace_id(trace) -> str | None:
+    if trace is None:
+        return None
+    for attr in ("trace_id", "id"):
+        value = getattr(trace, attr, None)
+        if value:
+            return str(value)
+    if isinstance(trace, dict):
+        for key in ("trace_id", "id"):
+            value = trace.get(key)
+            if value:
+                return str(value)
+    return None
 
 
 def _build_dependency_context(dependency_output_paths: list[str]) -> str:
@@ -108,13 +141,15 @@ def _load_orchestrator_specs(orchestrator_dir: str, subtask_id: str) -> list[dic
     return specs
 
 
-def create_workflow(user_prompt: str) -> str:
+def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[str, str | None]:
     observer = get_observer()
     provider_model = _provider_model_metadata()
     root_metadata = {
         "workflow_stage": "workflow",
         "workflow_version": WORKFLOW_VERSION,
         "original_user_prompt": user_prompt,
+        "run_id": run_id,
+        "output_dir": output_dir,
         **provider_model,
     }
     trace = observer.start_trace(
@@ -374,7 +409,7 @@ def create_workflow(user_prompt: str) -> str:
 
         observer.end(trace, output={"task_desc": task_desc, "status": "ok"}, metadata=root_metadata)
         observer.flush()
-        return final_answer
+        return final_answer, _extract_trace_id(trace)
     except Exception as exc:
         observer.end(
             trace,
@@ -384,3 +419,20 @@ def create_workflow(user_prompt: str) -> str:
         )
         observer.flush()
         raise
+
+
+def create_workflow_run(user_prompt: str, run_id: str | None = None) -> WorkflowRunResult:
+    resolved_run_id = run_id or generate_run_id()
+    with workflow_output_context(resolved_run_id) as output_dir:
+        result, trace_id = _execute_workflow(user_prompt, resolved_run_id, output_dir)
+        return WorkflowRunResult(
+            status="completed",
+            result=result,
+            run_id=resolved_run_id,
+            output_dir=output_dir,
+            trace_id=trace_id,
+        )
+
+
+def create_workflow(user_prompt: str) -> str:
+    return create_workflow_run(user_prompt).result
