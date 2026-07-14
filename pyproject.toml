@@ -44,6 +44,7 @@ dependencies = [
   "fastmcp>=3.4.2",
   "uvicorn>=0.38.0",
   "fastapi>=0.139.0",
+  "httpx2>=2.6.0",
 ]
 
 [project.scripts]
