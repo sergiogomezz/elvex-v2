@@ -1,5 +1,7 @@
 services:
   elvex-api:
+    image: elvex-api:latest
+    
     build:
       context: .
       dockerfile: Dockerfile
