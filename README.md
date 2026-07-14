@@ -1,7 +1,7 @@
 # Elvex v2
 
 ## Project Summary
-Elvex v2 is a multi-agent orchestration pipeline that turns a user prompt into a final natural-language answer through staged planning, decomposition, execution, and aggregation. The system first specifies the task, divides it into subtasks, validates the split, and then orchestrates specialized worker agents per subtask. Each stage is persisted under `src/elvex/outputs/` so the workflow remains inspectable and reproducible.
+Elvex v2 is a multi-agent orchestration pipeline that turns a user prompt into a final natural-language answer through staged planning, decomposition, execution, and aggregation. The system first specifies the task, divides it into subtasks, validates the split, and then orchestrates specialized worker agents per subtask. Each run persists artifacts under `outputs/runs/<run_id>/` so the workflow remains inspectable and reproducible.
 
 The execution model uses a double-funnel architecture: worker outputs are first consolidated per subtask (`gatherer_subagents`), then those subtask-level outputs are combined into a final user-facing response (`gatherer_subtasks`). This keeps decomposition and execution granular while preserving a coherent final output.
 
@@ -29,7 +29,39 @@ flowchart TD
     H --> I[Final Answer]
 ```
 
-## Run (Short Path)
+## Run With Docker
+1. Configure environment variables:
+```bash
+cp .env.example .env
+```
+Required keys:
+- `PROVIDER_USED` (`openai`, `ollama`, or `claude`)
+- `OPENAI_API_KEY` (if using OpenAI)
+- `OPENAI_MODEL` (for OpenAI runs)
+
+Optional observability keys (Langfuse):
+- `LANGFUSE_PUBLIC_KEY`
+- `LANGFUSE_SECRET_KEY`
+- `LANGFUSE_BASE_URL` (defaults to `https://cloud.langfuse.com`)
+
+2. Build and start the API:
+```bash
+docker compose up --build
+```
+
+3. Open the API:
+- Root: `http://127.0.0.1:8000/`
+- Interactive docs: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
+
+Workflow artifacts are written to `outputs/runs/<run_id>/`. Docker Compose mounts `./outputs` into the container so generated files remain available on your machine.
+
+To stop the API:
+```bash
+docker compose down
+```
+
+## Run Locally
 1. Create and activate a virtual environment with `uv`:
 ```bash
 uv venv
@@ -55,7 +87,7 @@ Optional observability keys (Langfuse):
 - `LANGFUSE_SECRET_KEY`
 - `LANGFUSE_BASE_URL` (defaults to `https://cloud.langfuse.com`)
 
-4. Run the local workflow:
+4. Run the workflow from the CLI:
 ```bash
 elvex
 ```
@@ -64,7 +96,7 @@ or
 elvex --prompt "Plan a 7-day trip to Malaysia"
 ```
 
-5. Run the API locally:
+5. Run the API without Docker:
 ```bash
 uv run uvicorn elvex.api.app:app --reload
 ```
