@@ -29,7 +29,7 @@ flowchart TD
     H --> I[Final Answer]
 ```
 
-## Run With Docker
+## Quick Start With Docker
 1. Configure environment variables:
 ```bash
 cp .env.example .env
@@ -53,6 +53,13 @@ docker compose up --build
 - Root: `http://127.0.0.1:8000/`
 - Interactive docs: `http://127.0.0.1:8000/docs`
 - Health check: `http://127.0.0.1:8000/health`
+
+Create a workflow run:
+```bash
+curl -X POST http://127.0.0.1:8000/runs \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Plan a 7-day trip to Malaysia"}'
+```
 
 Workflow artifacts are written to `outputs/runs/<run_id>/`. Docker Compose mounts `./outputs` into the container so generated files remain available on your machine.
 
