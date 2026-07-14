@@ -1,4 +1,6 @@
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from elvex.core import workflow
 from elvex.utils import loader
@@ -75,6 +77,22 @@ class FakeEvaluatorAgent:
             },
             None,
         )
+
+
+def test_generate_run_id_uses_madrid_local_time(monkeypatch):
+    class FixedDateTime:
+        @classmethod
+        def now(cls, tz=None):
+            assert tz == ZoneInfo("Europe/Madrid")
+            return datetime(2026, 7, 14, 12, 34, 56, tzinfo=tz)
+
+    class FixedUUID:
+        hex = "deadbeefcafebabe"
+
+    monkeypatch.setattr(workflow, "datetime", FixedDateTime)
+    monkeypatch.setattr(workflow, "uuid4", lambda: FixedUUID())
+
+    assert workflow.generate_run_id() == "run_20260714_123456_deadbeef"
 
 
 def test_create_workflow_runs_dependency_order_and_returns_final_answer(tmp_path, monkeypatch):

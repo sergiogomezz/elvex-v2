@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,6 +27,7 @@ from elvex.core.task_graph import build_task_graph, get_ready_subtasks, subtasks
 from elvex.utils.loader import workflow_output_context
 
 WORKFLOW_VERSION = "v1"
+RUN_ID_TIMEZONE = ZoneInfo("Europe/Madrid")
 REQUIRED_WORKER_SPEC_KEYS = {
     "task_desc",
     "subtask_id",
@@ -74,7 +76,7 @@ def _provider_model_metadata() -> dict[str, str | None]:
 
 
 def generate_run_id() -> str:
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(RUN_ID_TIMEZONE).strftime("%Y%m%d_%H%M%S")
     return f"run_{timestamp}_{uuid4().hex[:8]}"
 
 
