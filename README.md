@@ -44,12 +44,13 @@ Optional observability keys (Langfuse):
 - `LANGFUSE_SECRET_KEY`
 - `LANGFUSE_BASE_URL` (defaults to `https://cloud.langfuse.com`)
 
-2. Build and start the API:
+2. Build and start the API and Elvex Studio:
 ```bash
 docker compose up --build
 ```
 
-3. Open the API:
+3. Open Elvex:
+- Studio: `http://127.0.0.1:5173/`
 - Root: `http://127.0.0.1:8000/`
 - Interactive docs: `http://127.0.0.1:8000/docs`
 - Health check: `http://127.0.0.1:8000/health`
@@ -63,7 +64,24 @@ curl -X POST http://127.0.0.1:8000/runs \
 
 Workflow artifacts are written to `outputs/runs/<run_id>/`. Docker Compose mounts `./outputs` into the container so generated files remain available on your machine.
 
-To stop the API:
+### How the frontend talks to FastAPI in Docker
+
+Docker Compose starts two services on the same private Docker network:
+
+- `elvex-api`: FastAPI listens on port `8000`
+- `elvex-studio`: Nginx serves the compiled React app on port `5173`
+
+The browser sends Studio requests to `/api`. Nginx proxies them internally to
+`http://elvex-api:8000`, so the frontend does not contain an API hostname and
+the API key remains only in the backend container. The frontend never receives
+provider credentials.
+
+Studio creates a background workflow with `POST /studio/runs` and polls
+`GET /studio/runs/{run_id}` while it is running. FastAPI returns the accumulated
+workflow events so the interface can update specifiers, dividers, evaluators,
+subtasks, orchestrators, workers and gatherers as they finish.
+
+To stop Elvex:
 ```bash
 docker compose down
 ```
@@ -108,6 +126,36 @@ elvex --prompt "Plan a 7-day trip to Malaysia"
 uv run uvicorn elvex.api.app:app --reload
 ```
 Then open the interactive docs at `http://127.0.0.1:8000/docs`.
+
+6. In a second terminal, run Elvex Studio locally:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Then open `http://127.0.0.1:5173`. In local development, Studio connects
+directly to FastAPI at `http://localhost:8000`. To use another backend URL,
+copy `frontend/.env.example` to `frontend/.env` and change `VITE_API_URL`.
+
+## Elvex Studio
+
+Elvex Studio is a lightweight visual interface for the workflow:
+
+- OpenAI is selected by default, with Claude and Ollama available
+- live status for planning, evaluation and aggregation stages
+- generated subtasks and their dependency order
+- a visual character for every specialist worker
+- click-through inspection of objectives, prompts and outputs
+- final answer and failure feedback in the same run view
+
+The existing synchronous `POST /runs` endpoint remains available. Studio uses
+the separate `/studio/runs` endpoints so existing API integrations keep the
+same behavior.
+
+OpenAI and Claude work with the corresponding keys in `.env`. The current
+Ollama client expects the `ollama` executable on the same machine as FastAPI,
+so use Ollama with the local development setup rather than the Docker API
+container.
 
 ## Langfuse Tracing
 When `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` are configured, the workflow sends traces to Langfuse with:

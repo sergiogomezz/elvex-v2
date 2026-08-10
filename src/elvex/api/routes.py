@@ -1,9 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from elvex.api.schemas import HealthResponse, RootResponse, WorkflowRequest, WorkflowResponse
+from elvex.api.schemas import (
+    HealthResponse,
+    RootResponse,
+    StudioRunResponse,
+    StudioWorkflowRequest,
+    WorkflowRequest,
+    WorkflowResponse,
+)
 from elvex.core.errors import WorkflowReliabilityError
 from elvex.llms.errors import LLMProviderError
 from elvex.services.workflow_service import WorkflowService, get_workflow_service
+from elvex.services.studio_service import StudioRunStore, get_studio_store
 
 router = APIRouter()
 
@@ -39,3 +47,33 @@ def create_run(
         output_dir=run.output_dir,
         trace_id=run.trace_id,
     )
+
+
+@router.post(
+    "/studio/runs",
+    response_model=StudioRunResponse,
+    response_model_exclude_none=True,
+    status_code=202,
+)
+def create_studio_run(
+    request: StudioWorkflowRequest,
+    studio_store: StudioRunStore = Depends(get_studio_store),
+) -> StudioRunResponse:
+    return StudioRunResponse.model_validate(
+        studio_store.start(prompt=request.prompt, provider=request.provider)
+    )
+
+
+@router.get(
+    "/studio/runs/{run_id}",
+    response_model=StudioRunResponse,
+    response_model_exclude_none=True,
+)
+def get_studio_run(
+    run_id: str,
+    studio_store: StudioRunStore = Depends(get_studio_store),
+) -> StudioRunResponse:
+    run = studio_store.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Studio run not found")
+    return StudioRunResponse.model_validate(run)

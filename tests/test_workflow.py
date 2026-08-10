@@ -97,11 +97,13 @@ def test_generate_run_id_uses_madrid_local_time(monkeypatch):
 
 def test_create_workflow_runs_dependency_order_and_returns_final_answer(tmp_path, monkeypatch):
     observer = RecordingObserver()
+    events = []
     records = {
         "orchestrated": [],
         "worker_contexts": {},
         "gathered_subtasks": [],
         "final_task_desc": None,
+        "client_provider": None,
     }
 
     class FakeOrchestratorAgent:
@@ -180,7 +182,11 @@ def test_create_workflow_runs_dependency_order_and_returns_final_answer(tmp_path
     monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
     monkeypatch.setattr(loader, "load_project_root_path", lambda: str(tmp_path))
     monkeypatch.setattr(workflow, "get_observer", lambda: observer)
-    monkeypatch.setattr(workflow, "get_llm_client", lambda: object())
+    def fake_get_llm_client(config):
+        records["client_provider"] = config.provider
+        return object()
+
+    monkeypatch.setattr(workflow, "get_llm_client", fake_get_llm_client)
     monkeypatch.setattr(workflow, "TaskSpecifierAgent", FakeSpecifierAgent)
     monkeypatch.setattr(workflow, "TaskDividerAgent", FakeDividerAgent)
     monkeypatch.setattr(workflow, "TaskEvaluatorAgent", FakeEvaluatorAgent)
@@ -189,7 +195,12 @@ def test_create_workflow_runs_dependency_order_and_returns_final_answer(tmp_path
     monkeypatch.setattr(workflow, "GathererSubagents", FakeGathererSubagents)
     monkeypatch.setattr(workflow, "GathererSubtasks", FakeGathererSubtasks)
 
-    run = workflow.create_workflow_run("Build a demo answer", run_id="run_20260709_120000_deadbeef")
+    run = workflow.create_workflow_run(
+        "Build a demo answer",
+        run_id="run_20260709_120000_deadbeef",
+        provider="openai",
+        event_callback=events.append,
+    )
 
     assert run.status == "completed"
     assert run.result == "final answer"
@@ -200,6 +211,7 @@ def test_create_workflow_runs_dependency_order_and_returns_final_answer(tmp_path
     assert records["orchestrated"] == ["T1", "T2"]
     assert records["gathered_subtasks"] == ["T1", "T2"]
     assert records["final_task_desc"] == "demo_task"
+    assert records["client_provider"] == "openai"
     assert records["worker_contexts"]["T1"] == ""
     assert "answer from T1" in records["worker_contexts"]["T2"]
     assert '"subtask_id": "T1"' in records["worker_contexts"]["T2"]
@@ -231,3 +243,28 @@ def test_create_workflow_runs_dependency_order_and_returns_final_answer(tmp_path
     assert observer.spans[5]["metadata"]["agent_type"] == "worker"
     assert observer.ends[-1]["metadata"]["task_desc"] == "demo_task"
     assert observer.ends[-1]["metadata"]["number_of_subtasks"] == 2
+    assert [event["type"] for event in events] == [
+        "stage_started",
+        "stage_completed",
+        "stage_started",
+        "stage_completed",
+        "stage_started",
+        "stage_completed",
+        "subtasks_created",
+        "stage_started",
+        "agents_created",
+        "stage_started",
+        "agents_created",
+        "worker_started",
+        "worker_completed",
+        "stage_started",
+        "stage_completed",
+        "worker_started",
+        "worker_completed",
+        "stage_started",
+        "stage_completed",
+        "stage_started",
+        "stage_completed",
+    ]
+    assert events[6]["data"]["subtasks"][1]["depends_on"] == ["T1"]
+    assert events[12]["data"]["output"]["answer"] == "answer from T1"

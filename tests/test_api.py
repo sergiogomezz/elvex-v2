@@ -4,6 +4,7 @@ from elvex.api.app import create_app
 from elvex.core.errors import WorkflowReliabilityError
 from elvex.core.workflow import WorkflowRunResult
 from elvex.llms.errors import LLMQuotaError
+from elvex.services.studio_service import get_studio_store
 from elvex.services.workflow_service import get_workflow_service
 
 
@@ -136,3 +137,63 @@ def test_create_run_hides_unexpected_error_details():
 
     assert response.status_code == 500
     assert response.json() == {"detail": "Workflow execution failed"}
+
+
+class FakeStudioStore:
+    def __init__(self):
+        self.run = {
+            "run_id": "run_20260723_120000_studio01",
+            "prompt": "Research a topic",
+            "provider": "openai",
+            "status": "queued",
+            "result": None,
+            "trace_id": None,
+            "error": None,
+            "created_at": "2026-07-23T10:00:00+00:00",
+            "updated_at": "2026-07-23T10:00:00+00:00",
+            "events": [],
+        }
+
+    def start(self, prompt, provider):
+        self.run["prompt"] = prompt
+        self.run["provider"] = provider
+        return self.run
+
+    def get(self, run_id):
+        return self.run if run_id == self.run["run_id"] else None
+
+
+def test_studio_run_starts_with_openai_by_default():
+    app = create_app()
+    store = FakeStudioStore()
+    app.dependency_overrides[get_studio_store] = lambda: store
+    client = TestClient(app)
+
+    response = client.post("/studio/runs", json={"prompt": "Research a topic"})
+
+    assert response.status_code == 202
+    assert response.json()["provider"] == "openai"
+    assert response.json()["status"] == "queued"
+
+
+def test_studio_run_can_be_retrieved():
+    app = create_app()
+    store = FakeStudioStore()
+    app.dependency_overrides[get_studio_store] = lambda: store
+    client = TestClient(app)
+
+    response = client.get("/studio/runs/run_20260723_120000_studio01")
+
+    assert response.status_code == 200
+    assert response.json()["prompt"] == "Research a topic"
+
+
+def test_missing_studio_run_returns_404():
+    app = create_app()
+    store = FakeStudioStore()
+    app.dependency_overrides[get_studio_store] = lambda: store
+    client = TestClient(app)
+
+    response = client.get("/studio/runs/does-not-exist")
+
+    assert response.status_code == 404

@@ -2,6 +2,7 @@ import json
 import os
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, Callable
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -21,7 +22,7 @@ from elvex.agents.specifier import TaskSpecifierAgent
 from elvex.agents.divider import TaskDividerAgent
 from elvex.agents.evaluator import TaskEvaluatorAgent
 from elvex.agents.orchestrator import OrchestratorAgent
-from elvex.llms.registry import get_llm_client
+from elvex.llms.registry import LLMConfig, Provider, get_llm_client
 from elvex.observability import get_observer
 from elvex.core.task_graph import build_task_graph, get_ready_subtasks, subtasks_from_divider_output
 from elvex.utils.loader import workflow_output_context
@@ -36,6 +37,7 @@ REQUIRED_WORKER_SPEC_KEYS = {
     "objective",
     "prompt",
 }
+WorkflowEventCallback = Callable[[dict[str, Any]], None]
 
 
 @dataclass(frozen=True)
@@ -63,9 +65,9 @@ def _clean_env_value(value: str | None) -> str | None:
     return value or None
 
 
-def _provider_model_metadata() -> dict[str, str | None]:
+def _provider_model_metadata(provider_override: Provider | None = None) -> dict[str, str | None]:
     settings = WorkflowObservabilitySettings()
-    provider = (_clean_env_value(settings.provider_used) or "unknown").lower()
+    provider = provider_override or (_clean_env_value(settings.provider_used) or "unknown").lower()
     model_by_provider = {
         "openai": settings.openai_model,
         "claude": settings.claude_model,
@@ -73,6 +75,38 @@ def _provider_model_metadata() -> dict[str, str | None]:
     }
     model = _clean_env_value(model_by_provider.get(provider))
     return {"provider": provider, "model": model}
+
+
+def _emit(
+    callback: WorkflowEventCallback | None,
+    event_type: str,
+    *,
+    entity_id: str,
+    entity_type: str,
+    title: str,
+    status: str,
+    data: dict[str, Any] | None = None,
+) -> None:
+    if callback is None:
+        return
+    callback(
+        {
+            "type": event_type,
+            "entity_id": entity_id,
+            "entity_type": entity_type,
+            "title": title,
+            "status": status,
+            "data": data or {},
+        }
+    )
+
+
+def _read_json_output(path: str) -> Any:
+    try:
+        with open(path, "r") as output_file:
+            return json.load(output_file)
+    except (OSError, json.JSONDecodeError):
+        return {"output_path": path}
 
 
 def generate_run_id() -> str:
@@ -143,9 +177,15 @@ def _load_orchestrator_specs(orchestrator_dir: str, subtask_id: str) -> list[dic
     return specs
 
 
-def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[str, str | None]:
+def _execute_workflow(
+    user_prompt: str,
+    run_id: str,
+    output_dir: str,
+    provider: Provider | None = None,
+    event_callback: WorkflowEventCallback | None = None,
+) -> tuple[str, str | None]:
     observer = get_observer()
-    provider_model = _provider_model_metadata()
+    provider_model = _provider_model_metadata(provider)
     root_metadata = {
         "workflow_stage": "workflow",
         "workflow_version": WORKFLOW_VERSION,
@@ -161,7 +201,9 @@ def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[s
     )
 
     # getting client. It may be possible to get a different client for each agent
-    default_client = get_llm_client()
+    default_client = (
+        get_llm_client(LLMConfig(provider=provider)) if provider else get_llm_client()
+    )
 
     # Invoke specifier agent
     specifier_agent_config = AgentConfig(temperature=0.3)
@@ -177,9 +219,27 @@ def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[s
             "workflow_version": WORKFLOW_VERSION,
         },
     )
+    _emit(
+        event_callback,
+        "stage_started",
+        entity_id="specifier",
+        entity_type="specifier",
+        title="Task specifier",
+        status="running",
+        data={"prompt": user_prompt},
+    )
     try:
         specifier_result = specifier_agent.specify_task(user_prompt, lf_parent=specifier_span)
         observer.end(specifier_span, output={"status": "ok"})
+        _emit(
+            event_callback,
+            "stage_completed",
+            entity_id="specifier",
+            entity_type="specifier",
+            title="Task specifier",
+            status="completed",
+            data={"output": specifier_result},
+        )
     except Exception as exc:
         observer.end(
             specifier_span,
@@ -210,6 +270,15 @@ def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[s
         divider_result = None
 
         for round_num in range(1, max_rounds + 1):
+            _emit(
+                event_callback,
+                "stage_started",
+                entity_id="divider",
+                entity_type="divider",
+                title="Task divider",
+                status="running",
+                data={"round": round_num},
+            )
             round_span = observer.start_span(
                 parent=trace,
                 name=f"Divide and Evaluate Round {round_num}",
@@ -227,7 +296,34 @@ def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[s
                 evaluator_feedback=evaluator_feedback,
                 lf_parent=round_span,
             )
+            _emit(
+                event_callback,
+                "stage_completed",
+                entity_id="divider",
+                entity_type="divider",
+                title="Task divider",
+                status="completed",
+                data={"round": round_num, "output": divider_result},
+            )
+            _emit(
+                event_callback,
+                "stage_started",
+                entity_id="evaluator",
+                entity_type="evaluator",
+                title="Plan evaluator",
+                status="running",
+                data={"round": round_num},
+            )
             evaluation, _ = evaluator_agent.evaluate_tasks(divider_result, lf_parent=round_span)
+            _emit(
+                event_callback,
+                "stage_completed",
+                entity_id="evaluator",
+                entity_type="evaluator",
+                title="Plan evaluator",
+                status="completed",
+                data={"round": round_num, "output": evaluation},
+            )
 
             observer.end(
                 round_span,
@@ -251,6 +347,25 @@ def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[s
         # Build/validate task graph
         subtasks = subtasks_from_divider_output(divider_result)
         build_task_graph(subtasks)
+        _emit(
+            event_callback,
+            "subtasks_created",
+            entity_id="task_graph",
+            entity_type="task_graph",
+            title="Task graph",
+            status="completed",
+            data={
+                "subtasks": [
+                    {
+                        "id": subtask.id,
+                        "title": subtask.title,
+                        "description": subtask.description,
+                        "depends_on": list(subtask.depends_on),
+                    }
+                    for subtask in subtasks
+                ]
+            },
+        )
 
         task_desc = divider_result.get("task_desc", "unnamed_task")
         root_metadata = {
@@ -273,6 +388,15 @@ def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[s
                 raise ValueError("No ready subtasks found while orchestrating; possible dependency issue.")
 
             for st in ready_subtasks:
+                _emit(
+                    event_callback,
+                    "stage_started",
+                    entity_id=f"orchestrator:{st.id}",
+                    entity_type="orchestrator",
+                    title=f"Orchestrator · {st.title}",
+                    status="running",
+                    data={"subtask_id": st.id},
+                )
                 subtask_span = observer.start_span(
                     parent=trace,
                     name=f"Orchestrate Subtask {st.id}",
@@ -297,6 +421,18 @@ def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[s
                 )
                 subtask_specs[st.id] = _load_orchestrator_specs(orchestrator_dir, st.id)
                 orchestrated_subtasks.add(st.id)
+                _emit(
+                    event_callback,
+                    "agents_created",
+                    entity_id=f"orchestrator:{st.id}",
+                    entity_type="orchestrator",
+                    title=f"Orchestrator · {st.title}",
+                    status="completed",
+                    data={
+                        "subtask_id": st.id,
+                        "agents": subtask_specs[st.id],
+                    },
+                )
                 observer.end(
                     subtask_span,
                     output={
@@ -371,6 +507,22 @@ def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[s
                         prompt=agent_spec["prompt"],
                         context=context,
                     )
+                    worker_entity_id = f"worker:{subtask_id}:{agent_id}"
+                    _emit(
+                        event_callback,
+                        "worker_started",
+                        entity_id=worker_entity_id,
+                        entity_type="worker",
+                        title=agent_type,
+                        status="running",
+                        data={
+                            "agent_id": agent_id,
+                            "agent_type": agent_type,
+                            "subtask_id": subtask_id,
+                            "objective": agent_spec["objective"],
+                            "prompt": agent_spec["prompt"],
+                        },
+                    )
                     try:
                         output_path = worker.work(lf_parent=worker_span)
                     except MalformedAgentResponseError as exc:
@@ -384,10 +536,44 @@ def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[s
                             f"Worker '{agent_id}' failed for subtask '{subtask_id}': {exc}"
                         ) from exc
                     subtask_outputs.append(output_path)
+                    _emit(
+                        event_callback,
+                        "worker_completed",
+                        entity_id=worker_entity_id,
+                        entity_type="worker",
+                        title=agent_type,
+                        status="completed",
+                        data={
+                            "agent_id": agent_id,
+                            "agent_type": agent_type,
+                            "subtask_id": subtask_id,
+                            "objective": agent_spec["objective"],
+                            "output": _read_json_output(output_path),
+                            "output_path": output_path,
+                        },
+                    )
                     observer.end(worker_span, output={"output_path": output_path})
 
                 subtask_agent_outputs[st.id] = subtask_outputs
+                _emit(
+                    event_callback,
+                    "stage_started",
+                    entity_id=f"gatherer:{st.id}",
+                    entity_type="gatherer",
+                    title=f"Subtask gatherer · {st.title}",
+                    status="running",
+                    data={"subtask_id": st.id},
+                )
                 subagents_gatherer.gather_subtask(task_desc, st.id, lf_parent=execution_span)
+                _emit(
+                    event_callback,
+                    "stage_completed",
+                    entity_id=f"gatherer:{st.id}",
+                    entity_type="gatherer",
+                    title=f"Subtask gatherer · {st.title}",
+                    status="completed",
+                    data={"subtask_id": st.id},
+                )
                 executed_subtasks.add(st.id)
                 observer.end(
                     execution_span,
@@ -406,7 +592,24 @@ def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[s
                 "task_desc": task_desc,
             },
         )
+        _emit(
+            event_callback,
+            "stage_started",
+            entity_id="final_gatherer",
+            entity_type="final_gatherer",
+            title="Final gatherer",
+            status="running",
+        )
         final_answer = subtasks_gatherer.gather_subtasks(task_desc, lf_parent=final_gather_span)
+        _emit(
+            event_callback,
+            "stage_completed",
+            entity_id="final_gatherer",
+            entity_type="final_gatherer",
+            title="Final gatherer",
+            status="completed",
+            data={"output": final_answer},
+        )
         observer.end(final_gather_span, output={"status": "ok"})
 
         observer.end(trace, output={"task_desc": task_desc, "status": "ok"}, metadata=root_metadata)
@@ -423,10 +626,21 @@ def _execute_workflow(user_prompt: str, run_id: str, output_dir: str) -> tuple[s
         raise
 
 
-def create_workflow_run(user_prompt: str, run_id: str | None = None) -> WorkflowRunResult:
+def create_workflow_run(
+    user_prompt: str,
+    run_id: str | None = None,
+    provider: Provider | None = None,
+    event_callback: WorkflowEventCallback | None = None,
+) -> WorkflowRunResult:
     resolved_run_id = run_id or generate_run_id()
     with workflow_output_context(resolved_run_id) as output_dir:
-        result, trace_id = _execute_workflow(user_prompt, resolved_run_id, output_dir)
+        result, trace_id = _execute_workflow(
+            user_prompt,
+            resolved_run_id,
+            output_dir,
+            provider=provider,
+            event_callback=event_callback,
+        )
         return WorkflowRunResult(
             status="completed",
             result=result,

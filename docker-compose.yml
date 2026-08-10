@@ -18,3 +18,20 @@ services:
       - ./outputs:/app/outputs
 
     restart: unless-stopped
+
+  elvex-studio:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+
+    container_name: elvex-studio
+
+    ports:
+      - "5173:80"
+
+    depends_on:
+      - elvex-api
+
+    restart: unless-stopped
