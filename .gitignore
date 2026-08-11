@@ -14,11 +14,6 @@ build/
 .uv/
 .venv
 
-# Generated dependencies (uv can create lock files)
-uv.lock
-poetry.lock
-Pipfile.lock
-
 # VS Code
 .vscode/
 
